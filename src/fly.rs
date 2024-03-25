@@ -55,6 +55,7 @@ pub fn ensure_app(config: Config) -> Result<String> {
     return app;
 }
 
+// TODO this really isn't needed, maybe look into removing this fn
 fn handle_fly_err(json: serde_json::Value) -> std::result::Result<serde_json::Value, FlyError> {
     if json["error"] != serde_json::Value::Null {
         let msg = json["error"].as_str().unwrap();

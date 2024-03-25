@@ -1,3 +1,5 @@
+chall_root = "example_repo/"
+
 [fly]
 org = "amateursctf-2024"
 app_name = "amateursctf-2024"

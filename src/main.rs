@@ -1,19 +1,46 @@
 use anyhow::Result;
+use clap::{Parser, Subcommand};
 use dotenvy;
 use serde::Deserialize;
-use std::{fs, process::exit};
+use std::{fs, path::PathBuf, process::exit};
 use toml;
 
+mod commands;
 mod fly;
 
 #[derive(Deserialize)]
-struct Config {
-    fly: fly::Config,
+pub struct Config {
+    pub fly: fly::Config,
+    #[serde(default = "default_chall_root")]
+    pub chall_root: Option<PathBuf>,
+}
+
+fn default_chall_root() -> Option<PathBuf> {
+    std::env::current_dir().ok()
+}
+
+#[derive(Parser)]
+#[command(version, about = "les amateurs challenge deployment system", long_about = None)]
+struct Args {
+    /// Sets a custom config file
+    #[arg(short, long, default_value = "bear.toml")]
+    config: PathBuf,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Debug, Subcommand)]
+enum Commands {
+    /// List all challenges
+    List,
+    Deploy,
 }
 
 fn main() -> Result<()> {
+    let args = Args::parse();
     dotenvy::dotenv()?;
-    let config_file = match fs::read_to_string("bear.toml") {
+    let config_file = match fs::read_to_string(args.config) {
         Ok(f) => f,
         Err(_) => {
             eprintln!("bear.toml not found. Make sure bear.toml is created in the current working directory.");
@@ -29,7 +56,13 @@ fn main() -> Result<()> {
         }
     };
 
-    fly::ensure_app(config.fly)?;
+    match args.command {
+        Commands::List => commands::list::command(config)?,
+        Commands::Deploy => {
+            fly::ensure_app(config.fly)?;
+            ()
+        }
+    }
 
     Ok(())
 }
