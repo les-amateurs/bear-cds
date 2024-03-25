@@ -5,6 +5,7 @@ use serde::Deserialize;
 use std::{fs, path::PathBuf, process::exit};
 use toml;
 
+mod challenge;
 mod commands;
 mod fly;
 
