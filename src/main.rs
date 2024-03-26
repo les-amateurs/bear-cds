@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 use dotenvy;
 use serde::Deserialize;
 use std::{fs, path::PathBuf, process::exit};
@@ -8,6 +9,14 @@ use toml;
 mod challenge;
 mod commands;
 mod fly;
+
+#[macro_export]
+macro_rules! print_error {
+    ($($arg:tt)*) => ({
+        use colored::*;
+        eprintln!("{} {}", "ERROR:".red().bold(), format!($($arg)*).red().bold());
+    });
+}
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -21,7 +30,7 @@ fn default_chall_root() -> Option<PathBuf> {
 }
 
 #[derive(Parser)]
-#[command(version, about = "les amateurs challenge deployment system", long_about = None)]
+#[command(version, about = "---les amateurs challenge deployment system---", long_about = None)]
 struct Args {
     /// Sets a custom config file
     #[arg(short, long, default_value = "bear.toml")]
@@ -35,7 +44,11 @@ struct Args {
 enum Commands {
     /// List all challenges
     List,
+
+    #[clap(about = "Build all challenges")]
     Build,
+
+    #[clap(about = "Deploy all challenges to fly.io")]
     Deploy,
 }
 
@@ -46,7 +59,7 @@ async fn main() -> Result<()> {
     let config_file = match fs::read_to_string(args.config) {
         Ok(f) => f,
         Err(_) => {
-            eprintln!("bear.toml not found. Make sure bear.toml is created in the current working directory.");
+            print_error!("{}", "Bear.toml not found. Please make sure bear.toml exists in the current directory.");
             exit(1);
         }
     };
@@ -54,7 +67,7 @@ async fn main() -> Result<()> {
     let config: Config = match toml::from_str(&config_file) {
         Ok(c) => c,
         Err(_) => {
-            eprintln!("Failed to parse bear.toml, make sure bear.toml is valid.");
+            print_error!("{}", "Failed to parse bear.toml");
             exit(1);
         }
     };
