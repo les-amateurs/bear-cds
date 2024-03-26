@@ -1,5 +1,11 @@
 use anyhow::{anyhow, Result};
+use bollard::container::Config;
+use bollard::image::BuildImageOptions;
+use bollard::Docker;
 use serde::Deserialize;
+use std::default::Default;
+use std::fs::File;
+use std::io::Read;
 use std::{
     collections::HashMap,
     fs, io,
@@ -73,6 +79,30 @@ impl Challenge {
             .into_iter()
             .map(|path| Challenge::parse(path))
             .collect::<Result<Vec<Challenge>, _>>()
+    }
+    fn build(&self, root: PathBuf) -> Result<()> {
+        let docker = Docker::connect_with_local_defaults()?;
+        for (name, container) in &self.containers {
+            let build_path = Path::join(&root, &container.build);
+            // build a tar
+            let tar_file = File::create("docker.tar")?;
+            let mut tar = tar::Builder::new(tar_file);
+            tar.append_dir_all(".", &build_path)?;
+            tar.finish()?;
+
+            let mut options = BuildImageOptions {
+                dockerfile: "Dockerfile",
+                t: name,
+                rm: true,
+                ..Default::default()
+            };
+            let mut file = File::open("docker.tar")?;
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents).unwrap();
+
+            docker.build_image(options, None, Some(contents.into()));
+        }
+        Ok(())
     }
 }
 
