@@ -35,12 +35,14 @@ struct Args {
 enum Commands {
     /// List all challenges
     List,
+    Build,
     Deploy,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Args::parse();
-    dotenvy::dotenv()?;
+    let _ = dotenvy::dotenv();
     let config_file = match fs::read_to_string(args.config) {
         Ok(f) => f,
         Err(_) => {
@@ -59,6 +61,13 @@ fn main() -> Result<()> {
 
     match args.command {
         Commands::List => commands::list::command(config)?,
+        Commands::Build => {
+            let res =
+                challenge::Challenge::build_all(config.chall_root.ok_or(anyhow::anyhow!("g"))?)
+                    .await?;
+            println!("{:#?}", res);
+            ()
+        }
         Commands::Deploy => {
             fly::ensure_app(config.fly)?;
             ()

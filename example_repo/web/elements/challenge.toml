@@ -13,15 +13,7 @@ build = "."
 limits = { cpu = "100m", mem = "100M" }
 ports = [7000]
 
-[containers.bot]
-build = "./bot"
-limits = { cpu = "100m", mem = "100M" }
-ports = [8080]
-
 [expose.main]
 target = 7000
 tcp = 31290
 
-[expose.bot]
-target = 8080
-http = "gopher-bot"

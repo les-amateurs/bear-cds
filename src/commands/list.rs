@@ -4,7 +4,7 @@ use std::{fs, path::PathBuf, *};
 
 pub fn command(config: Config) -> Result<()> {
     if let Some(chall_root) = config.chall_root {
-        let challs = Challenge::get_all(chall_root)?;
+        let challs = Challenge::get_all(&chall_root)?;
         for chall in challs {
             println!("{:#?}", chall);
         }
