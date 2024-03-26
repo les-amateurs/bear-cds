@@ -1,21 +1,12 @@
-use crate::{challenge::get_chall_paths, Config};
+use crate::{challenge::Challenge, Config};
 use anyhow::{anyhow, Result};
 use std::{fs, path::PathBuf, *};
 
 pub fn command(config: Config) -> Result<()> {
     if let Some(chall_root) = config.chall_root {
-        let challs = get_chall_paths(chall_root)?;
+        let challs = Challenge::get_all(chall_root)?;
         for chall in challs {
-            if let [challenge, category] = &chall
-                .iter()
-                .rev()
-                .take(2)
-                .map(|c| c.to_str())
-                .collect::<Option<Vec<&str>>>()
-                .ok_or(anyhow!("Failed to convert OsStr to Str"))?[..]
-            {
-                println!("{}/{}", category, challenge);
-            }
+            println!("{:#?}", chall);
         }
         return Ok(());
     }

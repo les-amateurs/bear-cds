@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use std::{
     collections::HashMap,
@@ -7,8 +7,9 @@ use std::{
 };
 use toml;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Challenge {
+    pub id: String,
     pub name: String,
     pub author: String,
     pub description: String,
@@ -18,13 +19,14 @@ pub struct Challenge {
     pub expose: HashMap<String, Expose>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
 pub enum Attachment {
     File(PathBuf),
     Named { file: PathBuf, r#as: String },
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Container {
     build: PathBuf,
     limits: Limits,
@@ -32,23 +34,37 @@ pub struct Container {
 }
 
 // im honestly uncertain what types these should be so im using these
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Limits {
     cpu: String,
-    ram: String,
+    mem: String,
 }
 
 // some fancy stuff will be needed to do this, serde docs
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
 pub enum Expose {
-    Tcp(u16),
-    Http(u16),
+    Tcp { target: u16, tcp: u16 },
+    Http { target: u16, http: String },
 }
 
 impl Challenge {
-    pub fn parse(file: PathBuf) -> Result<Challenge> {
-        let file_data = fs::read_to_string(file)?;
-        return Ok(toml::from_str(&file_data)?);
+    pub fn parse(chall_dir: PathBuf) -> Result<Challenge> {
+        let file_data = fs::read_to_string(Path::join(&chall_dir, "challenge.toml"))?;
+        let mut toml: toml::Table = toml::from_str(&file_data)?;
+        let mut id_parts = chall_dir
+            .iter()
+            .rev()
+            .take(2)
+            .map(|c| c.to_str())
+            .collect::<Option<Vec<&str>>>()
+            .ok_or(anyhow!("Failed to convert OsStr to Str"))?;
+        id_parts.reverse();
+        let id = id_parts.join("/");
+        toml.insert(String::from("id"), toml::Value::String(id.clone()));
+        return Ok(toml
+            .try_into()
+            .map_err(|e| anyhow!("failed to parse parsing {}: {}", id, e))?);
     }
 
     pub fn get_all(root: PathBuf) -> Result<Vec<Challenge>> {
