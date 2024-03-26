@@ -50,7 +50,7 @@ pub enum Expose {
 
 impl Challenge {
     pub fn parse(chall_dir: PathBuf) -> Result<Challenge> {
-        let file_data = fs::read_to_string(Path::join(&chall_dir, "challenge.toml"))?;
+        let file_data = fs::read_to_string(&chall_dir.join("challenge.toml"))?;
         let mut toml: toml::Table = toml::from_str(&file_data)?;
         let mut id_parts = chall_dir
             .iter()
@@ -86,7 +86,7 @@ pub fn get_chall_paths(root: PathBuf) -> io::Result<Vec<PathBuf>> {
                 let chall = chall_entry?.path();
                 // TODO you want to parse the challenge.toml for this cause reason
 
-                let path = Path::join(&chall, "challenge.toml");
+                let path = &chall.join("challenge.toml");
                 if path.exists() {
                     challenges.push(chall);
                 }
