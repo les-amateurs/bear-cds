@@ -3,7 +3,6 @@ use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_json;
 use std::{env, *};
-use thiserror::Error;
 use ureq;
 
 lazy_static! {
@@ -17,14 +16,6 @@ pub struct Config {
     app_name: String,
 }
 
-#[derive(Error, Debug)]
-pub enum FlyError {
-    #[error("App not found")]
-    AppNotFound,
-    #[error("Unknown Error: {0}")]
-    Generic(String),
-}
-
 fn create_app(name: &str, org: &str) -> Result<String> {
     let json: serde_json::Value = ureq::post(&format!("{}/v1/apps", *FLY_HOSTNAME))
         .set("Authorization", &AUTH_HEADER)
@@ -33,7 +24,7 @@ fn create_app(name: &str, org: &str) -> Result<String> {
             "org_slug": org,
         }))?
         .into_json::<serde_json::Value>()?;
-    return Ok(handle_fly_err(json)?["id"].as_str().unwrap().to_string());
+    return Ok(json["id"].as_str().unwrap().to_string());
 }
 
 fn get_app(name: &str) -> Result<String> {
@@ -41,7 +32,7 @@ fn get_app(name: &str) -> Result<String> {
         .set("Authorization", &AUTH_HEADER)
         .call()?
         .into_json()?;
-    return Ok(handle_fly_err(json)?["id"].as_str().unwrap().to_string());
+    return Ok(json["id"].as_str().unwrap().to_string());
 }
 
 pub fn ensure_app(config: Config) -> Result<String> {
@@ -53,16 +44,4 @@ pub fn ensure_app(config: Config) -> Result<String> {
         }
     }
     return app;
-}
-
-// TODO this really isn't needed, maybe look into removing this fn
-fn handle_fly_err(json: serde_json::Value) -> std::result::Result<serde_json::Value, FlyError> {
-    if json["error"] != serde_json::Value::Null {
-        let msg = json["error"].as_str().unwrap();
-        if msg.starts_with("Could not find App") {
-            return Err(FlyError::AppNotFound);
-        }
-        return Err(FlyError::Generic(msg.to_string()));
-    }
-    return Ok(json);
 }

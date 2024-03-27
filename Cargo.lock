@@ -133,7 +133,6 @@ dependencies = [
  "serde_json",
  "tar",
  "temp-dir",
- "thiserror",
  "tokio",
  "tokio-macros",
  "toml",

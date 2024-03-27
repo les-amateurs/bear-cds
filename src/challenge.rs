@@ -1,17 +1,15 @@
 use anyhow::{anyhow, Result};
-use bollard::image::BuildImageOptions;
+use bollard::auth::DockerCredentials;
+use bollard::image::{BuildImageOptions, PushImageOptions};
 use bollard::Docker;
 use futures::stream::{self, StreamExt};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::default::Default;
+use std::env;
 use std::fs::File;
 use std::io::Read;
-use std::{
-    collections::HashMap,
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, fs, io, path::PathBuf};
 use temp_dir::TempDir;
 use toml;
 
@@ -58,6 +56,8 @@ pub enum Expose {
 lazy_static! {
     static ref DOCKER: Docker =
         Docker::connect_with_local_defaults().expect("failed to connect to docker");
+    static ref FLY_DOCKER_AUTH: String =
+        env::var("FLY_DOCKER_AUTH").expect("FLY_DOCKER_AUTH env variable not set.");
 }
 
 impl Challenge {
@@ -87,6 +87,7 @@ impl Challenge {
             .collect::<Result<Vec<Challenge>, _>>()
     }
 
+    // TODO return type bad >:(
     pub async fn build(
         self,
         root: &PathBuf,
@@ -135,6 +136,34 @@ impl Challenge {
             .await
             .into_iter()
             .collect()
+    }
+
+    pub async fn push(self) -> Result<()> {
+        for (name, container) in &self.containers {
+            let mut push = DOCKER.push_image::<String>(
+                &format!("{}-{}", self.id.replace("/", "-"), name),
+                None,
+                Some(DockerCredentials {
+                    auth: Some(FLY_DOCKER_AUTH.clone()),
+                    serveraddress: Some(String::from("registry.fly.io")),
+                    ..Default::default()
+                }),
+            );
+
+            while let Some(push_step) = push.next().await {
+                println!("{:#?}", push_step);
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn push_all(root: PathBuf) -> Result<()> {
+        let challs = Challenge::get_all(&root)?;
+        for chall in challs {
+            chall.push().await?;
+        }
+
+        Ok(())
     }
 }
 

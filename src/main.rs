@@ -13,11 +13,12 @@ mod fly;
 pub struct Config {
     pub fly: fly::Config,
     #[serde(default = "default_chall_root")]
-    pub chall_root: Option<PathBuf>,
+    pub chall_root: PathBuf,
 }
 
-fn default_chall_root() -> Option<PathBuf> {
-    std::env::current_dir().ok()
+fn default_chall_root() -> PathBuf {
+    std::env::current_dir()
+        .expect("No challenge root set, attempted to read current directory but failed.")
 }
 
 #[derive(Parser)]
@@ -62,14 +63,13 @@ async fn main() -> Result<()> {
     match args.command {
         Commands::List => commands::list::command(config)?,
         Commands::Build => {
-            let res =
-                challenge::Challenge::build_all(config.chall_root.ok_or(anyhow::anyhow!("g"))?)
-                    .await?;
+            let res = challenge::Challenge::build_all(config.chall_root).await?;
             println!("{:#?}", res);
             ()
         }
         Commands::Deploy => {
             fly::ensure_app(config.fly)?;
+            challenge::Challenge::push_all(config.chall_root).await?;
             ()
         }
     }
