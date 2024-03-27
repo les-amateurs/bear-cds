@@ -13,6 +13,8 @@ use std::{collections::HashMap, fs, io, path::PathBuf};
 use temp_dir::TempDir;
 use toml;
 
+use crate::fly;
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct Challenge {
     pub id: String,
@@ -138,14 +140,28 @@ impl Challenge {
             .collect()
     }
 
-    pub async fn push(self) -> Result<()> {
+    pub async fn push(self, repo: &str) -> Result<()> {
         for (name, container) in &self.containers {
+            let image_name = format!("{}-{}", self.id.replace("/", "-"), name);
+            let new_tag = format!("{}:{}", repo, image_name);
+            DOCKER
+                .tag_image(
+                    &image_name,
+                    Some(bollard::image::TagImageOptions {
+                        repo: new_tag.clone(),
+                        ..Default::default()
+                    }),
+                )
+                .await?;
             let mut push = DOCKER.push_image::<String>(
-                &format!("{}-{}", self.id.replace("/", "-"), name),
+                &new_tag,
                 None,
                 Some(DockerCredentials {
-                    auth: Some(FLY_DOCKER_AUTH.clone()),
-                    serveraddress: Some(String::from("registry.fly.io")),
+                    // https://community.fly.io/t/push-to-fly-io-image-registry-via-docker-api/9132
+                    // I have NO idea why the username is x and why the password is the api token,
+                    // this took 2 hours to figure out and probably took a couple years off my life as well.
+                    username: Some("x".to_string()),
+                    password: Some(fly::FLY_API_TOKEN.clone()),
                     ..Default::default()
                 }),
             );
@@ -157,10 +173,10 @@ impl Challenge {
         Ok(())
     }
 
-    pub async fn push_all(root: PathBuf) -> Result<()> {
+    pub async fn push_all(root: PathBuf, repo: &str) -> Result<()> {
         let challs = Challenge::get_all(&root)?;
         for chall in challs {
-            chall.push().await?;
+            chall.push(repo).await?;
         }
 
         Ok(())

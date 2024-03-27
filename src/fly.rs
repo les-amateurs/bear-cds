@@ -7,13 +7,14 @@ use ureq;
 
 lazy_static! {
     static ref FLY_HOSTNAME: String = env::var("FLY_API_HOSTNAME").unwrap();
-    static ref AUTH_HEADER: String = format!("Bearer {}", env::var("FLY_API_TOKEN").unwrap());
+    pub static ref FLY_API_TOKEN: String = env::var("FLY_API_TOKEN").unwrap();
+    static ref AUTH_HEADER: String = format!("Bearer {}", *FLY_API_TOKEN);
 }
 
 #[derive(Deserialize)]
 pub struct Config {
-    org: String,
-    app_name: String,
+    pub org: String,
+    pub app_name: String,
 }
 
 fn create_app(name: &str, org: &str) -> Result<String> {
@@ -35,7 +36,7 @@ fn get_app(name: &str) -> Result<String> {
     return Ok(json["id"].as_str().unwrap().to_string());
 }
 
-pub fn ensure_app(config: Config) -> Result<String> {
+pub fn ensure_app(config: &Config) -> Result<String> {
     let app = get_app(&config.app_name);
     if let Err(ref e) = app {
         if let Some(ureq::Error::Status(404, _)) = e.downcast_ref::<ureq::Error>() {

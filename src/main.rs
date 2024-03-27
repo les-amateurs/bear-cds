@@ -46,10 +46,10 @@ enum Commands {
     /// List all challenges
     List,
 
-    #[clap(about = "Build all challenges")]
+    /// Build all challenges
     Build,
 
-    #[clap(about = "Deploy all challenges to fly.io")]
+    // Deploy all challenges to fly.io
     Deploy,
 }
 
@@ -60,7 +60,10 @@ async fn main() -> Result<()> {
     let config_file = match fs::read_to_string(args.config) {
         Ok(f) => f,
         Err(_) => {
-            print_error!("{}", "Bear.toml not found. Please make sure bear.toml exists in the current directory.");
+            print_error!(
+                "{}",
+                "Bear.toml not found. Please make sure bear.toml exists in the current directory."
+            );
             exit(1);
         }
     };
@@ -81,8 +84,12 @@ async fn main() -> Result<()> {
             ()
         }
         Commands::Deploy => {
-            fly::ensure_app(config.fly)?;
-            challenge::Challenge::push_all(config.chall_root).await?;
+            fly::ensure_app(&config.fly)?;
+            challenge::Challenge::push_all(
+                config.chall_root,
+                &format!("registry.fly.io/{}", &config.fly.app_name),
+            )
+            .await?;
             ()
         }
     }
