@@ -173,13 +173,11 @@ impl Challenge {
         Ok(())
     }
 
-    pub async fn push_all(root: PathBuf, repo: &str) -> Result<()> {
-        let challs = Challenge::get_all(&root)?;
-        for chall in challs {
-            chall.push(repo).await?;
-        }
-
-        Ok(())
+    pub fn get_container_ids(&self) -> Vec<String> {
+        self.containers
+            .iter()
+            .map(|(name, _)| format!("{}-{}", self.id.replace("/", "-"), name))
+            .collect()
     }
 }
 

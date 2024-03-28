@@ -1,4 +1,5 @@
 use anyhow::Result;
+use challenge::Challenge;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use dotenvy;
@@ -85,12 +86,29 @@ async fn main() -> Result<()> {
         }
         Commands::Deploy => {
             fly::ensure_app(&config.fly)?;
-            challenge::Challenge::push_all(
-                config.chall_root,
-                &format!("registry.fly.io/{}", &config.fly.app_name),
-            )
-            .await?;
-            ()
+            let app_name = &config.fly.app_name;
+            let challs = Challenge::get_all(&config.chall_root)?;
+            let repo = &format!("registry.fly.io/{}", app_name);
+            let machines = fly::machines_name_to_id(app_name)?;
+            for chall in challs {
+                let container_ids = chall.get_container_ids();
+                chall.push(&repo).await?;
+                for name in container_ids {
+                    let machine_config = fly::MachineConfig {
+                        image: format!("{}:{}", repo, name),
+                        ..Default::default()
+                    };
+                    if machines.contains_key(&name) {
+                        fly::update_machine(
+                            app_name,
+                            machines.get(&name).unwrap(),
+                            &machine_config,
+                        )?;
+                    } else {
+                        fly::create_machine(app_name, &name, &machine_config)?;
+                    }
+                }
+            }
         }
     }
 

@@ -1,8 +1,8 @@
 use anyhow::Result;
 use lazy_static::lazy_static;
-use serde::Deserialize;
-use serde_json;
-use std::{env, *};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::{collections::HashMap, env, *};
 use ureq;
 
 lazy_static! {
@@ -18,7 +18,7 @@ pub struct Config {
 }
 
 fn create_app(name: &str, org: &str) -> Result<String> {
-    let json: serde_json::Value = ureq::post(&format!("{}/v1/apps", *FLY_HOSTNAME))
+    let json: Value = ureq::post(&format!("{}/v1/apps", *FLY_HOSTNAME))
         .set("Authorization", &AUTH_HEADER)
         .send_json(ureq::json!({
             "app_name": name,
@@ -29,7 +29,7 @@ fn create_app(name: &str, org: &str) -> Result<String> {
 }
 
 fn get_app(name: &str) -> Result<String> {
-    let json: serde_json::Value = ureq::get(&format!("{}/v1/apps/{name}", *FLY_HOSTNAME))
+    let json: Value = ureq::get(&format!("{}/v1/apps/{name}", *FLY_HOSTNAME))
         .set("Authorization", &AUTH_HEADER)
         .call()?
         .into_json()?;
@@ -45,4 +45,65 @@ pub fn ensure_app(config: &Config) -> Result<String> {
         }
     }
     return app;
+}
+
+#[derive(Serialize, Debug, Default)]
+pub struct MachineConfig {
+    pub image: String,
+    pub auto_destroy: Option<bool>,
+    pub env: Option<HashMap<String, String>>,
+    pub guest: Option<AllocatedResources>,
+}
+
+#[derive(Serialize, Debug, Default)]
+pub struct AllocatedResources {
+    pub cpu_kind: String,
+    pub cpus: u32,
+    pub kernel_args: Option<Vec<String>>,
+    pub memory_mb: u32,
+}
+
+pub fn create_machine(app: &str, name: &str, machine_config: &MachineConfig) -> Result<Value> {
+    let url = format!("{}/v1/apps/{}/machines", *FLY_HOSTNAME, app);
+
+    let json = ureq::post(&url)
+        .set("Authorization", &AUTH_HEADER)
+        .send_json(ureq::json!({
+            "name": name,
+            "config": machine_config,
+        }))?
+        .into_json()?;
+
+    Ok(json)
+}
+
+pub fn update_machine(app: &str, id: &str, machine_config: &MachineConfig) -> Result<Value> {
+    let url = format!("{}/v1/apps/{}/machines/{}", *FLY_HOSTNAME, app, id);
+
+    let json = ureq::post(&url)
+        .set("Authorization", &AUTH_HEADER)
+        .send_json(ureq::json!({
+            "config": machine_config,
+        }))?
+        .into_json()?;
+
+    Ok(json)
+}
+
+pub fn machines_name_to_id(app: &str) -> Result<HashMap<String, String>> {
+    let json = ureq::get(&format!("{}/v1/apps/{}/machines", *FLY_HOSTNAME, app))
+        .set("Authorization", &AUTH_HEADER)
+        .call()?
+        .into_json()?;
+    if let Value::Array(arr) = json {
+        let mut map = HashMap::with_capacity(arr.len());
+        for machine in arr {
+            map.insert(
+                machine["name"].as_str().unwrap().to_string(),
+                machine["id"].as_str().unwrap().to_string(),
+            );
+        }
+        return Ok(map);
+    }
+    unreachable!()
 }
