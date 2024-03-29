@@ -2,7 +2,7 @@ use anyhow::Result;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, env, *};
+use std::{collections::HashMap, env, io::Read, *};
 use ureq;
 
 lazy_static! {
@@ -53,14 +53,16 @@ pub struct MachineConfig {
     pub auto_destroy: Option<bool>,
     pub env: Option<HashMap<String, String>>,
     pub guest: Option<AllocatedResources>,
+    // TODO this is called, lazyness, and needs to be resolved asap!
+    pub services: Option<Value>,
 }
 
 #[derive(Serialize, Debug, Default)]
 pub struct AllocatedResources {
     pub cpu_kind: String,
-    pub cpus: u32,
+    pub cpus: Option<u32>,
     pub kernel_args: Option<Vec<String>>,
-    pub memory_mb: u32,
+    pub memory_mb: Option<u32>,
 }
 
 pub fn create_machine(app: &str, name: &str, machine_config: &MachineConfig) -> Result<Value> {
@@ -78,7 +80,7 @@ pub fn create_machine(app: &str, name: &str, machine_config: &MachineConfig) -> 
 }
 
 pub fn update_machine(app: &str, id: &str, machine_config: &MachineConfig) -> Result<Value> {
-    let url = format!("{}/v1/apps/{}/machines/{}", *FLY_HOSTNAME, app, id);
+    let url = format!("{}/v1/apps/{app}/machines/{id}", *FLY_HOSTNAME);
 
     let json = ureq::post(&url)
         .set("Authorization", &AUTH_HEADER)
@@ -88,6 +90,33 @@ pub fn update_machine(app: &str, id: &str, machine_config: &MachineConfig) -> Re
         .into_json()?;
 
     Ok(json)
+}
+
+pub fn wait_for_machine(app: &str, id: &str) -> Result<()> {
+    ureq::get(&format!(
+        "{}/v1/apps/{app}/machines/{id}/wait",
+        *FLY_HOSTNAME
+    ))
+    .set("Authorization", &AUTH_HEADER)
+    .call()?
+    .into_json()?;
+    Ok(())
+}
+
+pub fn execute_command(
+    app: &str,
+    id: &str,
+    command: Vec<&str>,
+) -> Result<Box<dyn Read + Send + Sync + 'static>> {
+    Ok(ureq::post(&format!(
+        "{}/v1/apps/{app}/machines/{id}/exec",
+        *FLY_HOSTNAME
+    ))
+    .set("Authorization", &AUTH_HEADER)
+    .send_json(ureq::json!({
+        "command": command
+    }))?
+    .into_reader())
 }
 
 pub fn machines_name_to_id(app: &str) -> Result<HashMap<String, String>> {

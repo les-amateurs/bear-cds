@@ -1,4 +1,5 @@
 chall_root = "example_repo/"
+hostname = "amateursctf-2024.fly.dev"
 
 [fly]
 org = "amateursctf-2024"

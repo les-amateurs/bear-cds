@@ -10,7 +10,7 @@ provide = ["main.go", { file = "bot/main.go", as = "bot.go" }]
 
 [containers.main]
 build = "."
-limits = { cpu = "100m", mem = "100M" }
+limits = { cpu = 1, mem = 256 }
 ports = [3000]
 
 [expose.main]

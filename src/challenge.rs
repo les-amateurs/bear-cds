@@ -1,9 +1,9 @@
+use crate::DOCKER;
 use anyhow::{anyhow, Result};
 use bollard::auth::DockerCredentials;
 use bollard::image::{BuildImageOptions, PushImageOptions};
 use bollard::Docker;
 use futures::stream::{self, StreamExt};
-use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::default::Default;
 use std::env;
@@ -36,30 +36,23 @@ pub enum Attachment {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Container {
-    build: PathBuf,
-    limits: Limits,
+    pub build: PathBuf,
+    pub limits: Limits,
     ports: Vec<u16>,
 }
 
 // im honestly uncertain what types these should be so im using these
 #[derive(Deserialize, Debug, Clone)]
 pub struct Limits {
-    cpu: String,
-    mem: String,
+    pub cpu: Option<u32>,
+    pub mem: Option<u32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Expose {
-    Tcp { target: u16, tcp: u16 },
-    Http { target: u16, http: String },
-}
-
-lazy_static! {
-    static ref DOCKER: Docker =
-        Docker::connect_with_local_defaults().expect("failed to connect to docker");
-    static ref FLY_DOCKER_AUTH: String =
-        env::var("FLY_DOCKER_AUTH").expect("FLY_DOCKER_AUTH env variable not set.");
+    Tcp { target: u32, tcp: u32 },
+    Http { target: u32, http: String },
 }
 
 impl Challenge {
@@ -78,7 +71,7 @@ impl Challenge {
         toml.insert(String::from("id"), toml::Value::String(id.clone()));
         return Ok(toml
             .try_into()
-            .map_err(|e| anyhow!("failed to parse parsing {}: {}", id, e))?);
+            .map_err(|e| anyhow!("failed to parse parsing {id}: {e}"))?);
     }
 
     pub fn get_all(root: &PathBuf) -> Result<Vec<Challenge>> {
@@ -111,7 +104,7 @@ impl Challenge {
 
             let options = BuildImageOptions {
                 dockerfile: "Dockerfile",
-                t: &format!("{}-{}", self.id.replace("/", "-"), name),
+                t: &self.container_id(name),
                 rm: true,
                 ..Default::default()
             };
@@ -140,10 +133,10 @@ impl Challenge {
             .collect()
     }
 
-    pub async fn push(self, repo: &str) -> Result<()> {
+    pub async fn push(&self, repo: &str) -> Result<()> {
         for (name, container) in &self.containers {
-            let image_name = format!("{}-{}", self.id.replace("/", "-"), name);
-            let new_tag = format!("{}:{}", repo, image_name);
+            let image_name = self.container_id(name);
+            let new_tag = format!("{repo}:{image_name}");
             DOCKER
                 .tag_image(
                     &image_name,
@@ -173,11 +166,8 @@ impl Challenge {
         Ok(())
     }
 
-    pub fn get_container_ids(&self) -> Vec<String> {
-        self.containers
-            .iter()
-            .map(|(name, _)| format!("{}-{}", self.id.replace("/", "-"), name))
-            .collect()
+    pub fn container_id(&self, name: &str) -> String {
+        return format!("{}-{}", self.id.replace("/", "-"), name);
     }
 }
 
