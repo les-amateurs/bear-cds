@@ -4,7 +4,7 @@ use crate::{
     challenge::{Challenge, Expose},
     fly, Config, DOCKER,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bollard::{auth::DockerCredentials, image::BuildImageOptions};
 use futures::stream::StreamExt;
 use serde_json::json;
@@ -22,6 +22,9 @@ pub async fn command(config: Config) -> Result<()> {
         chall.push(&repo).await?;
         for (name, container) in &chall.containers {
             let id = chall.container_id(&name);
+            if container.limits.mem.unwrap_or_default() % 256 == 0 {
+                Err(anyhow!("Memory must be a multiple of 256."))?;
+            }
             let machine_config = fly::MachineConfig {
                 image: format!("{repo}:{id}"),
                 guest: Some(fly::AllocatedResources {
@@ -78,6 +81,14 @@ pub async fn command(config: Config) -> Result<()> {
             }]
         }));
     }
+
+    http_expose_json.push(json!({
+        "handle": [{
+            "handler": "static_response",
+            "status_code": 404,
+            "body": "Not Found",
+        }]
+    }));
 
     let mut tcp_expose_json = HashMap::with_capacity(tcp_expose.len());
     for (port, (name, target)) in tcp_expose {
