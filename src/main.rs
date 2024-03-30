@@ -1,5 +1,5 @@
 use anyhow::Result;
-use bollard::{Docker};
+use bollard::Docker;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -99,7 +99,7 @@ async fn main() -> Result<()> {
             println!("{:#?}", res);
             ()
         }
-        Commands::Deploy => debug(commands::deploy::command(config).await)?,
+        Commands::Deploy => commands::deploy::command(config).await?,
     }
 
     Ok(())
