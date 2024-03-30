@@ -1,9 +1,9 @@
 use crate::DOCKER;
 use anyhow::{anyhow, Result};
 use bollard::auth::DockerCredentials;
-use bollard::image::{BuildImageOptions};
+use bollard::image::BuildImageOptions;
 
-use futures::stream::{StreamExt};
+use futures::stream::StreamExt;
 use serde::Deserialize;
 use std::default::Default;
 
@@ -109,7 +109,7 @@ impl Challenge {
 
             let options = BuildImageOptions {
                 dockerfile: "Dockerfile",
-                t: &self.container_id(name).to_lowercase(),
+                t: &self.container_id(name),
                 rm: true,
                 ..Default::default()
             };
@@ -120,7 +120,7 @@ impl Challenge {
             let mut build = DOCKER.build_image(options, None, Some(contents.into()));
             while let Some(build_step) = build.next().await {
                 if let Some(stream) = build_step?.stream {
-                    // println!("{stream}")
+                    println!("{stream}")
                 }
             }
 

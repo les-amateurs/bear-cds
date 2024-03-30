@@ -1,4 +1,4 @@
-name = "BUFFER-OVERFLOW"
+name = "buffer-overflow"
 author = "unvariant"
 description = "default description. contact an admin to write an actual description."
 flag = "chal/flag.txt"

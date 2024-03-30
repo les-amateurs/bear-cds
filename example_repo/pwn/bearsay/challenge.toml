@@ -10,7 +10,7 @@ ports = [ 5000,]
 
 [expose.chal]
 target = 5000
-tcp = 1338
+tcp = 1339
 
 [containers.chal.limits]
 cpu = 1
