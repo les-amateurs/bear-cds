@@ -1,6 +1,13 @@
 chall_root = "example_repo/"
-hostname = "amateursctf-2024.fly.dev"
+hostname = "bcds.cyberclasscamp.com"
 
 [fly]
 org = "amateursctf-2024"
 app_name = "amateursctf-2024"
+
+[[caddy.apps.tls.automation.policies]]
+[[caddy.apps.tls.automation.policies.issuers]]
+module = "acme"
+[caddy.apps.tls.automation.policies.issuers.challenges.dns.provider]
+name = "cloudflare"
+api_token = "7nfQ7tyXaBQL86DXXQUZioDyHOSzrc01Y5m98ysP"
