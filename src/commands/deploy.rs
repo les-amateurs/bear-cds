@@ -22,7 +22,7 @@ pub async fn command(config: Config) -> Result<()> {
         chall.push(&repo).await?;
         for (name, container) in &chall.containers {
             let id = chall.container_id(&name);
-            if container.limits.mem.unwrap_or_default() % 256 == 0 {
+            if container.limits.mem.unwrap_or_default() % 256 != 0 {
                 Err(anyhow!("Memory must be a multiple of 256."))?;
             }
             let machine_config = fly::MachineConfig {
@@ -69,9 +69,7 @@ pub async fn command(config: Config) -> Result<()> {
     for (sub, target) in http_expose {
         http_expose_json.push(json!({
             "match": [{
-                "host": [
-                    format!("{sub}.{}", config.hostname)
-                ]
+                "host": [format!("{sub}.{}", config.hostname)],
             }],
             "handle": [{
                 "handler": "reverse_proxy",
@@ -114,8 +112,16 @@ pub async fn command(config: Config) -> Result<()> {
             "http":{
                 "servers": {
                     "bear-cds-http": {
-                        "listen": [":80"],
-                        "routes": http_expose_json,
+                        "listen": [":443"],
+                        "routes": [{
+                            "handle": [{
+                                "handler": "subroute",
+                                "routes": http_expose_json,
+                            }],
+                            "match": [{
+                                "host": [format!("*.{}", config.hostname)],
+                            }]
+                        }],
                     }
                 }
             },
