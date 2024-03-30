@@ -1,13 +1,13 @@
 use anyhow::Result;
-use bollard::{auth::DockerCredentials, image::BuildImageOptions, Docker};
-use challenge::Challenge;
+use bollard::{Docker};
+
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use dotenvy;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_json::json;
-use std::{collections::HashMap, fs, path::PathBuf, process::exit};
+use std::{fs, path::PathBuf, process::exit};
 use toml;
 
 mod challenge;
