@@ -1,0 +1,17 @@
+name = "bearsay"
+author = "unvariant"
+description = "default description. contact an admin to write an actual description."
+flag = "chal/flag.txt"
+provide = [ "./dist.tar.xz",]
+
+[containers.chal]
+build = "./chal"
+ports = [ 5000,]
+
+[expose.chal]
+target = 5000
+tcp = 46666
+
+[containers.chal.limits]
+cpu = "100m"
+last = "100M"
