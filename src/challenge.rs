@@ -69,9 +69,9 @@ impl Challenge {
         id_parts.reverse();
         let id = id_parts.join("/");
         toml.insert(String::from("id"), toml::Value::String(id.clone()));
-        return Ok(toml
+        Ok(toml
             .try_into()
-            .map_err(|e| anyhow!("failed to parse parsing {id}: {e}"))?);
+            .map_err(|e| anyhow!("failed to parse parsing {id}: {e}"))?)
     }
 
     pub fn get_all(root: &PathBuf) -> Result<Vec<Challenge>> {
@@ -109,7 +109,7 @@ impl Challenge {
 
             let options = BuildImageOptions {
                 dockerfile: "Dockerfile",
-                t: &self.container_id(name),
+                t: &self.container_id(name).to_lowercase(),
                 rm: true,
                 ..Default::default()
             };
@@ -120,7 +120,7 @@ impl Challenge {
             let mut build = DOCKER.build_image(options, None, Some(contents.into()));
             while let Some(build_step) = build.next().await {
                 if let Some(stream) = build_step?.stream {
-                    println!("{stream}")
+                    // println!("{stream}")
                 }
             }
 

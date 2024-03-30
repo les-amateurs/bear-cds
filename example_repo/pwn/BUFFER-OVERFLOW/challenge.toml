@@ -1,4 +1,4 @@
-name = "bearsay"
+name = "BUFFER-OVERFLOW"
 author = "unvariant"
 description = "default description. contact an admin to write an actual description."
 flag = "chal/flag.txt"
@@ -10,7 +10,7 @@ ports = [ 5000,]
 
 [expose.chal]
 target = 5000
-tcp = 1338
+tcp = 1337
 
 [containers.chal.limits]
 cpu = 1
