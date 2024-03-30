@@ -46,7 +46,7 @@ pub async fn command(config: Config) -> Result<()> {
             if let Some(expose) = chall.expose.get(name) {
                 match expose {
                     Expose::Tcp { target, tcp } => {
-                        tcp_expose.insert(*tcp, (name.clone(), format!("{internal_url}:{target}")));
+                        tcp_expose.insert(*tcp, (id.clone(), format!("{internal_url}:{target}")));
                     }
                     Expose::Http { target, http } => {
                         http_expose.insert(http.clone(), format!("{internal_url}:{target}"));
