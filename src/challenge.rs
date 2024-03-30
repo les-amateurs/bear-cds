@@ -109,7 +109,7 @@ impl Challenge {
 
             let options = BuildImageOptions {
                 dockerfile: "Dockerfile",
-                t: &self.container_id(name),
+                t: &self.container_id(name).to_lowercase(),
                 rm: true,
                 ..Default::default()
             };
@@ -120,9 +120,11 @@ impl Challenge {
             let mut build = DOCKER.build_image(options, None, Some(contents.into()));
             while let Some(build_step) = build.next().await {
                 if let Some(stream) = build_step?.stream {
-                    println!("{stream}")
+                    print!("{stream}")
                 }
             }
+
+            print!("\n");
 
             // build_info.push();
         }
@@ -137,6 +139,18 @@ impl Challenge {
             .await
             .into_iter()
             .collect()
+    }
+
+    pub async fn build_all_slow(root: PathBuf) -> Result<Vec<Vec<bollard::models::BuildInfo>>> {
+        let tmp_dir = TempDir::new().unwrap();
+        let challs = Challenge::get_all(&root)?;
+        print!("{:#?}", challs);
+        let mut models = Vec::new();
+        for chall in challs {
+            models.push(chall.build(&root, &tmp_dir).await?);
+        }
+
+        Ok(models)
     }
 
     pub async fn push(&self, repo: &str) -> Result<()> {

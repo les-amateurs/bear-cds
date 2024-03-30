@@ -65,6 +65,9 @@ enum Commands {
     /// Build all challenges
     Build,
 
+    /// Build challenges sequentially
+    SlowBuild,
+
     // Deploy all challenges to fly.io
     Deploy,
 }
@@ -100,6 +103,11 @@ async fn main() -> Result<()> {
             ()
         }
         Commands::Deploy => commands::deploy::command(config).await?,
+        Commands::SlowBuild => {
+            let res = challenge::Challenge::build_all_slow(config.chall_root).await?;
+            println!("{:#?}", res);
+            ()
+        }
     }
 
     Ok(())
