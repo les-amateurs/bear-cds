@@ -14,4 +14,4 @@ http = "bearsay"
 
 [containers.chal.limits]
 cpu = 1
-last = 256
+mem = 256
