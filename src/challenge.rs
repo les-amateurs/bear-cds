@@ -1,12 +1,12 @@
 use crate::DOCKER;
 use anyhow::{anyhow, Result};
 use bollard::auth::DockerCredentials;
-use bollard::image::{BuildImageOptions, PushImageOptions};
-use bollard::Docker;
-use futures::stream::{self, StreamExt};
+use bollard::image::{BuildImageOptions};
+
+use futures::stream::{StreamExt};
 use serde::Deserialize;
 use std::default::Default;
-use std::env;
+
 use std::fs::File;
 use std::io::Read;
 use std::{collections::HashMap, fs, io, path::PathBuf};
@@ -88,7 +88,7 @@ impl Challenge {
         root: &PathBuf,
         tmp_dir: &TempDir,
     ) -> Result<Vec<bollard::models::BuildInfo>> {
-        let mut build_info = vec![];
+        let build_info = vec![];
         for (name, container) in &self.containers {
             let mut build_path = root.clone();
             build_path.push(&self.id);
@@ -140,7 +140,7 @@ impl Challenge {
     }
 
     pub async fn push(&self, repo: &str) -> Result<()> {
-        for (name, container) in &self.containers {
+        for (name, _container) in &self.containers {
             let image_name = self.container_id(name);
             let new_tag = format!("{repo}:{image_name}");
             DOCKER
