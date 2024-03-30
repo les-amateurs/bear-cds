@@ -39,7 +39,7 @@ pub async fn command(config: Config) -> Result<()> {
             let json = if machines.contains_key(&id) {
                 fly::update_machine(app_name, machines.get(&id).unwrap(), &machine_config)?
             } else {
-                fly::create_machine(app_name, &name, &machine_config)?
+                fly::create_machine(app_name, &id, &machine_config)?
             };
             let machine_id = json["id"].as_str().unwrap();
             let internal_url = format!("{machine_id}.vm.{}.internal", config.fly.app_name);
@@ -60,93 +60,19 @@ pub async fn command(config: Config) -> Result<()> {
         println!("Caddy server not found. Building and deploying.");
         let machine_id = build_ingress(app_name, &repo).await?;
         println!("Waiting on ingress to start");
-        fly::wait_for_machine(app_name, &machine_id)?;
+        println!("{:?}", fly::wait_for_machine(app_name, &machine_id));
         println!("Ingress Created");
         machines.insert("ingress".to_string(), machine_id.to_string());
     }
 
-    let mut http_expose_json = Vec::with_capacity(http_expose.len());
-    for (sub, target) in http_expose {
-        http_expose_json.push(json!({
-            "match": [{
-                "host": [format!("{sub}.{}", config.hostname)],
-            }],
-            "handle": [{
-                "handler": "reverse_proxy",
-                "upstreams": [{
-                    "dial": target,
-                }]
-            }]
-        }));
-    }
-
-    http_expose_json.push(json!({
-        "handle": [{
-            "handler": "static_response",
-            "status_code": 404,
-            "body": "Not Found",
-        }]
-    }));
-
-    let mut tcp_expose_json = HashMap::with_capacity(tcp_expose.len());
-    for (port, (name, target)) in tcp_expose {
-        tcp_expose_json.insert(
-            name,
-            json!({
-                "listen": [format!("0.0.0.0:{port}")],
-                "routes": [{
-                    "handle": [
-                        {
-                            "handler": "proxy",
-                            "upstreams": [{ "dial": target }]
-                        }
-                    ]
-                }]
-            }),
-        );
-    }
-
-    // okay now we do caddy stuffing
-    let mut caddy = json!({
-        "apps": {
-            "http":{
-                "servers": {
-                    "bear-cds-http": {
-                        "listen": [":443"],
-                        "routes": [{
-                            "handle": [{
-                                "handler": "subroute",
-                                "routes": http_expose_json,
-                            }],
-                            "match": [{
-                                "host": [format!("*.{}", config.hostname)],
-                            }]
-                        }],
-                    }
-                }
-            },
-            "layer4": {
-                "servers": tcp_expose_json,
-            }
-        }
-    });
-    merge(&mut caddy, &config.caddy);
-    println!("{}", caddy);
-    let mut buf = Vec::new();
-    fly::execute_command(
-        app_name,
+    update_ingress(
+        config,
         machines.get("ingress").unwrap(),
-        vec![
-            "curl",
-            "localhost:2019/load",
-            "-H",
-            "Content-Type: application/json",
-            "-d",
-            &caddy.to_string(),
-        ],
-    )?
-    .read_to_end(&mut buf)?;
-    println!("{:?}", String::from_utf8(buf));
+        &repo,
+        http_expose,
+        tcp_expose,
+    )
+    .await?;
 
     return Ok(());
 }
@@ -161,7 +87,7 @@ fn merge(a: &mut serde_json::Value, b: &serde_json::Value) {
         (a, b) => *a = b.clone(),
     }
 }
-
+// TODO merge these two functions into one
 async fn build_ingress(app_name: &str, repo: &str) -> Result<String> {
     let tag = format!("{repo}:ingress");
     let ingress_tar = include_bytes!("../../caddy.tar.gz").to_vec();
@@ -201,27 +127,141 @@ async fn build_ingress(app_name: &str, repo: &str) -> Result<String> {
         "ingress",
         &fly::MachineConfig {
             image: tag,
-            services: Some(json!([
-                {
-                    "ports": [
-                        {
-                            "port": 443,
-                        },
-                        {
-                            "port": 80,
-                        },
-                        {
-                            "start_port": 10_000,
-                            "end_port": 40_000,
-                        }
-                    ],
-                    "protocol": "tcp",
-                    "internal_port": 80,
-                }
-            ])),
+            services: None,
             ..Default::default()
         },
     )?;
 
     Ok(json["id"].as_str().unwrap().to_string())
+}
+
+async fn update_ingress(
+    config: Config,
+    ingress_id: &str,
+    repo: &str,
+    http_expose: HashMap<String, String>,
+    tcp_expose: HashMap<u32, (String, String)>,
+) -> Result<()> {
+    let tag = format!("{repo}:ingress");
+    let mut services = Vec::new();
+    for (port, _) in &tcp_expose {
+        services.push(json!({
+            "ports": [{ "port": port }],
+            "protocol": "tcp",
+            "internal_port": port,
+        }))
+    }
+    services.push(json!({
+        "ports": [{ "port": 443 }],
+        "protocol": "tcp",
+        "internal_port": 443,
+    }));
+
+    services.push(json!({
+        "ports": [{ "port": 80 }],
+        "protocol": "tcp",
+        "internal_port": 80,
+    }));
+    println!(
+        "{:#?}",
+        fly::update_machine(
+            &config.fly.app_name,
+            ingress_id,
+            &fly::MachineConfig {
+                image: tag,
+                services: Some(services.into()),
+                ..Default::default()
+            },
+        )?
+    );
+
+    println!("Waiting on ingress to start");
+    println!(
+        "{:?}",
+        fly::wait_for_machine(&config.fly.app_name, &ingress_id)
+    );
+    println!("Ingress Updated");
+    let mut http_expose_json = Vec::with_capacity(http_expose.len());
+    for (sub, target) in http_expose {
+        http_expose_json.push(json!({
+            "match": [{
+                "host": [format!("{sub}.{}", config.hostname)],
+            }],
+            "handle": [{
+                "handler": "reverse_proxy",
+                "upstreams": [{
+                    "dial": target,
+                }]
+            }]
+        }));
+    }
+
+    http_expose_json.push(json!({
+        "handle": [{
+            "handler": "static_response",
+            "status_code": 404,
+            "body": "Not Found",
+        }]
+    }));
+
+    let mut tcp_expose_json = HashMap::with_capacity(tcp_expose.len());
+    for (port, (name, target)) in tcp_expose {
+        tcp_expose_json.insert(
+            name,
+            json!({
+                "listen": [format!("0.0.0.0:{port}")],
+                "routes": [{
+                    "handle": [
+                        {
+                            "handler": "proxy",
+                            "upstreams": [{ "dial": [target] }]
+                        }
+                    ]
+                }]
+            }),
+        );
+    }
+
+    // okay now we do caddy stuffing
+    let mut caddy = json!({
+        "apps": {
+            "layer4": {
+                "servers": tcp_expose_json,
+            },
+            "http":{
+                "servers": {
+                    "bear-cds-http": {
+                        "listen": [":80"],
+                        "routes": [{
+                            "handle": [{
+                                "handler": "subroute",
+                                "routes": http_expose_json,
+                            }],
+                            "match": [{
+                                "host": [format!("*.{}", config.hostname)],
+                            }]
+                        }],
+                    }
+                }
+            }
+        }
+    });
+    merge(&mut caddy, &config.caddy);
+    println!("{}", caddy);
+    let mut buf = Vec::new();
+    fly::execute_command(
+        &config.fly.app_name,
+        ingress_id,
+        vec![
+            "curl",
+            "localhost:2019/load",
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            &caddy.to_string(),
+        ],
+    )?
+    .read_to_end(&mut buf)?;
+    println!("{:?}", String::from_utf8(buf));
+    Ok(())
 }

@@ -99,13 +99,13 @@ async fn main() -> Result<()> {
             println!("{:#?}", res);
             ()
         }
-        Commands::Deploy => commands::deploy::command(config).await?,
+        Commands::Deploy => debug(commands::deploy::command(config).await)?,
     }
 
     Ok(())
 }
 
-fn debug<T>(res: Result<T>) -> Result<()> {
+pub fn debug<T>(res: Result<T>) -> Result<()> {
     if let Err(e) = res {
         if let Ok(ureq::Error::Status(_, response)) = e.downcast() {
             println!("{}", response.into_string()?);

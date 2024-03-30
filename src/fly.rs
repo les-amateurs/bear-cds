@@ -99,7 +99,7 @@ pub fn wait_for_machine(app: &str, id: &str) -> Result<()> {
     ))
     .set("Authorization", &AUTH_HEADER)
     .call()?
-    .into_json()?;
+    .into_string()?;
     Ok(())
 }
 

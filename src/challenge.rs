@@ -99,7 +99,12 @@ impl Challenge {
                 tmp_dir.child(format!("{}-{}.docker.tar", self.id.replace("/", "-"), name));
             let tar_file = File::create(&tar_path)?;
             let mut tar = tar::Builder::new(tar_file);
-            tar.append_dir_all(".", &build_path)?;
+            tar.append_dir_all(".", &build_path).map_err(|_| {
+                anyhow!(
+                    "Failed to read {}. Make sure it exists and is a directory.",
+                    build_path.display()
+                )
+            })?;
             tar.finish()?;
 
             let options = BuildImageOptions {
@@ -127,6 +132,7 @@ impl Challenge {
     pub async fn build_all(root: PathBuf) -> Result<Vec<Vec<bollard::models::BuildInfo>>> {
         let tmp_dir = TempDir::new().unwrap();
         let challs = Challenge::get_all(&root)?;
+        print!("{:#?}", challs);
         futures::future::join_all(challs.into_iter().map(|chall| chall.build(&root, &tmp_dir)))
             .await
             .into_iter()
