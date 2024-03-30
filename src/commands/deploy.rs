@@ -14,7 +14,10 @@ pub async fn command(config: Config) -> Result<()> {
     let app_name = &config.fly.app_name;
     let challs = Challenge::get_all(&config.chall_root)?;
     let repo = &format!("registry.fly.io/{}", app_name);
-    let mut machines = fly::machines_name_to_id(app_name)?;
+    let mut machines = fly::list_machines(app_name)?
+        .into_iter()
+        .map(|machine| (machine.name.clone(), machine))
+        .collect::<HashMap<String, fly::MachineInfo>>();
 
     let mut http_expose: HashMap<String, String> = HashMap::new();
     let mut tcp_expose: HashMap<u32, (String, String)> = HashMap::new();
@@ -22,6 +25,10 @@ pub async fn command(config: Config) -> Result<()> {
         chall.push(&repo).await?;
         for (name, container) in &chall.containers {
             let id = chall.container_id(&name);
+            println!(
+                "{:#?}",
+                DOCKER.inspect_image(&format!("{repo}:{id}")).await?
+            );
             if container.limits.mem.unwrap_or_default() % 256 != 0 {
                 Err(anyhow!("Memory must be a multiple of 256."))?;
             }
@@ -36,12 +43,12 @@ pub async fn command(config: Config) -> Result<()> {
                 ..Default::default()
             };
 
-            let json = if machines.contains_key(&id) {
-                fly::update_machine(app_name, machines.get(&id).unwrap(), &machine_config)?
+            let machine = if machines.contains_key(&id) {
+                fly::update_machine(app_name, &machines.get(&id).unwrap().id, &machine_config)?
             } else {
                 fly::create_machine(app_name, &id, &machine_config)?
             };
-            let machine_id = json["id"].as_str().unwrap();
+            let machine_id = machine.id;
             let internal_url = format!("{machine_id}.vm.{}.internal", config.fly.app_name);
             if let Some(expose) = chall.expose.get(name) {
                 match expose {
@@ -58,16 +65,16 @@ pub async fn command(config: Config) -> Result<()> {
 
     if !machines.contains_key("ingress") {
         println!("Caddy server not found. Building and deploying.");
-        let machine_id = build_ingress(app_name, &repo).await?;
+        let machine = build_ingress(app_name, &repo).await?;
         println!("Waiting on ingress to start");
-        println!("{:?}", fly::wait_for_machine(app_name, &machine_id));
+        println!("{:?}", fly::wait_for_machine(app_name, &machine.id));
         println!("Ingress Created");
-        machines.insert("ingress".to_string(), machine_id.to_string());
+        machines.insert("ingress".to_string(), machine);
     }
 
     update_ingress(
         config,
-        machines.get("ingress").unwrap(),
+        &machines.get("ingress").unwrap().id,
         &repo,
         http_expose,
         tcp_expose,
@@ -88,7 +95,7 @@ fn merge(a: &mut serde_json::Value, b: &serde_json::Value) {
     }
 }
 // TODO merge these two functions into one
-async fn build_ingress(app_name: &str, repo: &str) -> Result<String> {
+async fn build_ingress(app_name: &str, repo: &str) -> Result<fly::MachineInfo> {
     let tag = format!("{repo}:ingress");
     let ingress_tar = include_bytes!("../../caddy.tar.gz").to_vec();
     let mut build = DOCKER.build_image(
@@ -122,7 +129,7 @@ async fn build_ingress(app_name: &str, repo: &str) -> Result<String> {
         println!("{:#?}", push_step);
     }
 
-    let json = fly::create_machine(
+    let machine = fly::create_machine(
         app_name,
         "ingress",
         &fly::MachineConfig {
@@ -132,7 +139,7 @@ async fn build_ingress(app_name: &str, repo: &str) -> Result<String> {
         },
     )?;
 
-    Ok(json["id"].as_str().unwrap().to_string())
+    Ok(machine)
 }
 
 async fn update_ingress(
@@ -176,10 +183,7 @@ async fn update_ingress(
     );
 
     println!("Waiting on ingress to start");
-    println!(
-        "{:?}",
-        fly::wait_for_machine(&config.fly.app_name, &ingress_id)
-    );
+    fly::wait_for_machine(&config.fly.app_name, &ingress_id)?;
     println!("Ingress Updated");
     let mut http_expose_json = Vec::with_capacity(http_expose.len());
     for (sub, target) in http_expose {
