@@ -1,5 +1,5 @@
 use anyhow::Result;
-use bollard::{Docker};
+use bollard::Docker;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -65,6 +65,9 @@ enum Commands {
     /// Build all challenges
     Build,
 
+    /// Build challenges sequentially
+    SlowBuild,
+
     // Deploy all challenges to fly.io
     Deploy,
 }
@@ -96,6 +99,11 @@ async fn main() -> Result<()> {
         Commands::List => commands::list::command(config)?,
         Commands::Build => {
             let res = challenge::Challenge::build_all(config.chall_root).await?;
+            println!("{:#?}", res);
+            ()
+        }
+        Commands::SlowBuild => {
+            let res = challenge::Challenge::build_all_slow(config.chall_root).await?;
             println!("{:#?}", res);
             ()
         }
