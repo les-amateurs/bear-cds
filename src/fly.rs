@@ -23,8 +23,23 @@ pub struct MachineConfig {
     pub auto_destroy: Option<bool>,
     pub env: Option<HashMap<String, String>>,
     pub guest: Option<AllocatedResources>,
-    // TODO this is called, lazyness, and needs to be resolved asap!
-    pub services: Option<Value>,
+    pub services: Option<Vec<MachineService>>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct MachineService {
+    // TODO make type with "udp" and "tcp" as arguments
+    pub protocol: String,
+    pub internal_port: u32,
+    pub ports: Vec<MachinePort>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct MachinePort {
+    pub port: Option<u32>,
+    pub start_port: Option<u32>,
+    pub end_port: Option<u32>,
+    pub handlers: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
@@ -53,18 +68,25 @@ pub struct MachineImageDetails {
     pub digest: String,
 }
 
-fn create_app(name: &str, org: &str) -> Result<MachineInfo> {
-    let machine: MachineInfo = ureq::post(&format!("{}/v1/apps", *FLY_HOSTNAME))
+#[derive(Deserialize)]
+pub struct AppInfo {
+    pub id: String,
+    pub name: String,
+    pub status: String,
+}
+
+fn create_app(name: &str, org: &str) -> Result<AppInfo> {
+    let app: AppInfo = ureq::post(&format!("{}/v1/apps", *FLY_HOSTNAME))
         .set("Authorization", &AUTH_HEADER)
         .send_json(ureq::json!({
             "app_name": name,
             "org_slug": org,
         }))?
         .into_json()?;
-    return Ok(machine);
+    return Ok(app);
 }
 
-fn get_app(name: &str) -> Result<MachineInfo> {
+fn get_app(name: &str) -> Result<AppInfo> {
     let machine = ureq::get(&format!("{}/v1/apps/{name}", *FLY_HOSTNAME))
         .set("Authorization", &AUTH_HEADER)
         .call()?
@@ -72,7 +94,7 @@ fn get_app(name: &str) -> Result<MachineInfo> {
     return Ok(machine);
 }
 
-pub fn ensure_app(config: &Config) -> Result<MachineInfo> {
+pub fn ensure_app(config: &Config) -> Result<AppInfo> {
     let app = get_app(&config.app_name);
     if let Err(ref e) = app {
         if let Some(ureq::Error::Status(404, _)) = e.downcast_ref::<ureq::Error>() {

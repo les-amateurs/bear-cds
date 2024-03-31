@@ -18,6 +18,7 @@ pub async fn command(config: Config) -> Result<()> {
         .into_iter()
         .map(|machine| (machine.name.clone(), machine))
         .collect::<HashMap<String, fly::MachineInfo>>();
+    println!("{:#?}", machines);
 
     let mut http_expose: HashMap<String, String> = HashMap::new();
     let mut tcp_expose: HashMap<u32, (String, String)> = HashMap::new();
@@ -152,23 +153,34 @@ async fn update_ingress(
     let tag = format!("{repo}:ingress");
     let mut services = Vec::new();
     for (port, _) in &tcp_expose {
-        services.push(json!({
-            "ports": [{ "port": port }],
-            "protocol": "tcp",
-            "internal_port": port,
-        }))
+        services.push(fly::MachineService {
+            ports: vec![fly::MachinePort {
+                port: Some(*port),
+                ..Default::default()
+            }],
+            protocol: "tcp".to_string(),
+            internal_port: *port,
+        });
     }
-    services.push(json!({
-        "ports": [{ "port": 443 }],
-        "protocol": "tcp",
-        "internal_port": 443,
-    }));
 
-    services.push(json!({
-        "ports": [{ "port": 80 }],
-        "protocol": "tcp",
-        "internal_port": 80,
-    }));
+    services.push(fly::MachineService {
+        ports: vec![fly::MachinePort {
+            port: Some(80),
+            ..Default::default()
+        }],
+        protocol: "tcp".to_string(),
+        internal_port: 80,
+    });
+
+    services.push(fly::MachineService {
+        ports: vec![fly::MachinePort {
+            port: Some(443),
+            ..Default::default()
+        }],
+        protocol: "tcp".to_string(),
+        internal_port: 443,
+    });
+
     println!(
         "{:#?}",
         fly::update_machine(

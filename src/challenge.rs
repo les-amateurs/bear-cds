@@ -131,26 +131,19 @@ impl Challenge {
         Ok(build_info)
     }
 
-    pub async fn build_all(root: PathBuf) -> Result<Vec<Vec<bollard::models::BuildInfo>>> {
+    pub async fn build_all(
+        root: PathBuf,
+        max_par_builds: usize,
+    ) -> Result<Vec<Vec<bollard::models::BuildInfo>>> {
         let tmp_dir = TempDir::new().unwrap();
         let challs = Challenge::get_all(&root)?;
         print!("{:#?}", challs);
-        futures::future::join_all(challs.into_iter().map(|chall| chall.build(&root, &tmp_dir)))
+        futures::stream::iter(challs.into_iter().map(|c| c.build(&root, &tmp_dir)))
+            .buffer_unordered(max_par_builds)
+            .collect::<Vec<Result<Vec<_>>>>()
             .await
             .into_iter()
-            .collect()
-    }
-
-    pub async fn build_all_slow(root: PathBuf) -> Result<Vec<Vec<bollard::models::BuildInfo>>> {
-        let tmp_dir = TempDir::new().unwrap();
-        let challs = Challenge::get_all(&root)?;
-        print!("{:#?}", challs);
-        let mut models = Vec::new();
-        for chall in challs {
-            models.push(chall.build(&root, &tmp_dir).await?);
-        }
-
-        Ok(models)
+            .collect::<Result<Vec<Vec<_>>>>()
     }
 
     pub async fn push(&self, repo: &str) -> Result<()> {

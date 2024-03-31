@@ -2,7 +2,6 @@ use anyhow::Result;
 use bollard::Docker;
 
 use clap::{Parser, Subcommand};
-use colored::Colorize;
 use dotenvy;
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -63,13 +62,19 @@ enum Commands {
     List,
 
     /// Build all challenges
-    Build,
-
-    /// Build challenges sequentially
-    SlowBuild,
+    Build {
+        /// Max number of challenges to build in parellel
+        #[arg(long, default_value = "4")]
+        threads: usize,
+        #[arg()]
+        challs: Option<Vec<String>>,
+    },
 
     // Deploy all challenges to fly.io
-    Deploy,
+    Deploy {
+        #[arg()]
+        challs: Option<Vec<String>>,
+    },
 }
 
 #[tokio::main]
@@ -97,17 +102,11 @@ async fn main() -> Result<()> {
 
     match args.command {
         Commands::List => commands::list::command(config)?,
-        Commands::Build => {
-            let res = challenge::Challenge::build_all(config.chall_root).await?;
-            println!("{:#?}", res);
+        Commands::Build { threads, challs } => {
+            challenge::Challenge::build_all(config.chall_root, threads).await?;
             ()
         }
-        Commands::Deploy => commands::deploy::command(config).await?,
-        Commands::SlowBuild => {
-            let res = challenge::Challenge::build_all_slow(config.chall_root).await?;
-            println!("{:#?}", res);
-            ()
-        }
+        Commands::Deploy { challs } => commands::deploy::command(config).await?,
     }
 
     Ok(())
