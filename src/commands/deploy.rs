@@ -2,17 +2,37 @@ use std::collections::HashMap;
 
 use crate::{
     challenge::{Challenge, Expose},
-    fly, Config, DOCKER,
+    fly, Commands, Config, DOCKER,
 };
 use anyhow::{anyhow, Result};
 use bollard::{auth::DockerCredentials, image::BuildImageOptions};
 use futures::stream::StreamExt;
 use serde_json::json;
 
-pub async fn command(config: Config) -> Result<()> {
+pub async fn command(config: Config, challs: Option<Vec<String>>) -> Result<()> {
     fly::ensure_app(&config.fly)?;
     let app_name = &config.fly.app_name;
-    let challs = Challenge::get_all(&config.chall_root)?;
+    let challs = if let Some(challs) = challs {
+        Challenge::get_some(&config.chall_root, challs)?
+    } else {
+        Challenge::get_all(&config.chall_root)?
+    };
+    match challs.len() {
+        1 => println!("Deploying {}", challs[0].id),
+        2 => println!("Deploying {} and {}", challs[0].id, challs[1].id),
+        _ => {
+            println!(
+                "Deploying {}, {} and {}",
+                challs[0].id,
+                challs[1].id,
+                if challs.len() > 3 {
+                    "more"
+                } else {
+                    &challs[2].id
+                },
+            )
+        }
+    }
     let repo = &format!("registry.fly.io/{}", app_name);
     let mut machines = fly::list_machines(app_name)?
         .into_iter()

@@ -57,7 +57,7 @@ pub enum Expose {
 
 impl Challenge {
     pub fn parse(chall_dir: PathBuf) -> Result<Challenge> {
-        let file_data = fs::read_to_string(&chall_dir.join("challenge.toml"))?;
+        let file_data = fs::read_to_string(&chall_dir.join("challenge.toml")).map_err(|_| anyhow!("Failed to read challenge.toml, Make sure it exists at the root of your challenge directory"))?;
         let mut toml: toml::Table = toml::from_str(&file_data)?;
         let mut id_parts = chall_dir
             .iter()
@@ -74,12 +74,29 @@ impl Challenge {
             .map_err(|e| anyhow!("failed to parse parsing {id}: {e}"))?)
     }
 
+    pub fn get(root: &PathBuf, chall: String) -> Result<Challenge> {
+        let dir = root.as_path().join(chall);
+        if !dir.is_dir() {
+            return Err(anyhow!("{} is not a directory", dir.display()));
+        }
+
+        Challenge::parse(dir)
+    }
+
     pub fn get_all(root: &PathBuf) -> Result<Vec<Challenge>> {
         let paths = get_chall_paths(root)?;
         paths
             .into_iter()
             .map(|path| Challenge::parse(path))
             .collect::<Result<Vec<Challenge>, _>>()
+    }
+
+    pub fn get_some(root: &PathBuf, challs: Vec<String>) -> Result<Vec<Challenge>> {
+        let mut parsed_challs = Vec::new();
+        for chall in challs {
+            parsed_challs.push(Challenge::get(&root, chall)?);
+        }
+        Ok(parsed_challs)
     }
 
     // TODO return type bad >:(
@@ -129,21 +146,6 @@ impl Challenge {
             // build_info.push();
         }
         Ok(build_info)
-    }
-
-    pub async fn build_all(
-        root: PathBuf,
-        max_par_builds: usize,
-    ) -> Result<Vec<Vec<bollard::models::BuildInfo>>> {
-        let tmp_dir = TempDir::new().unwrap();
-        let challs = Challenge::get_all(&root)?;
-        print!("{:#?}", challs);
-        futures::stream::iter(challs.into_iter().map(|c| c.build(&root, &tmp_dir)))
-            .buffer_unordered(max_par_builds)
-            .collect::<Vec<Result<Vec<_>>>>()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<Vec<_>>>>()
     }
 
     pub async fn push(&self, repo: &str) -> Result<()> {
