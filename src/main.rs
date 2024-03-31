@@ -15,6 +15,7 @@ use toml;
 mod challenge;
 mod commands;
 mod fly;
+mod rctf;
 
 lazy_static! {
     pub static ref DOCKER: Docker =
@@ -32,6 +33,7 @@ macro_rules! print_error {
 #[derive(Deserialize)]
 pub struct Config {
     pub fly: fly::Config,
+    pub rctf: Option<rctf::Config>,
     #[serde(default = "default_chall_root")]
     pub chall_root: PathBuf,
     pub hostname: String,

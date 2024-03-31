@@ -2,21 +2,17 @@ use std::collections::HashMap;
 
 use crate::{
     challenge::{Challenge, Expose},
-    fly, Commands, Config, DOCKER,
+    fly, rctf, Config, DOCKER,
 };
 use anyhow::{anyhow, Result};
 use bollard::{auth::DockerCredentials, image::BuildImageOptions};
 use futures::stream::StreamExt;
 use serde_json::json;
 
-pub async fn command(config: Config, challs: Option<Vec<String>>) -> Result<()> {
+pub async fn command(config: Config, selected: Option<Vec<String>>) -> Result<()> {
     fly::ensure_app(&config.fly)?;
     let app_name = &config.fly.app_name;
-    let challs = if let Some(challs) = challs {
-        Challenge::get_some(&config.chall_root, challs)?
-    } else {
-        Challenge::get_all(&config.chall_root)?
-    };
+    let challs = Challenge::get_all(&config.chall_root)?;
     match challs.len() {
         1 => println!("Deploying {}", challs[0].id),
         2 => println!("Deploying {} and {}", challs[0].id, challs[1].id),
@@ -42,34 +38,46 @@ pub async fn command(config: Config, challs: Option<Vec<String>>) -> Result<()> 
 
     let mut http_expose: HashMap<String, String> = HashMap::new();
     let mut tcp_expose: HashMap<u32, (String, String)> = HashMap::new();
-    for chall in challs {
-        chall.push(&repo).await?;
+    for chall in &challs {
         for (name, container) in &chall.containers {
             let id = chall.container_id(&name);
-            println!(
-                "{:#?}",
-                DOCKER.inspect_image(&format!("{repo}:{id}")).await?
-            );
-            if container.limits.mem.unwrap_or_default() % 256 != 0 {
-                Err(anyhow!("Memory must be a multiple of 256."))?;
-            }
-            let machine_config = fly::MachineConfig {
-                image: format!("{repo}:{id}"),
-                guest: Some(fly::AllocatedResources {
-                    cpu_kind: "shared".to_string(),
-                    cpus: container.limits.cpu,
-                    memory_mb: container.limits.mem,
-                    kernel_args: None,
-                }),
-                ..Default::default()
-            };
+            let machine_id = if selected.is_none()
+                || challs
+                    .iter()
+                    .any(|c| selected.as_ref().unwrap().contains(&c.id))
+            {
+                chall.push(&repo, name).await?;
+                // println!(
+                //     "{:#?}",
+                //     DOCKER.inspect_image(&format!("{repo}:{id}")).await?
+                // );
+                if container.limits.mem.unwrap_or_default() % 256 != 0 {
+                    Err(anyhow!("Memory must be a multiple of 256."))?;
+                }
+                let machine_config = fly::MachineConfig {
+                    image: format!("{repo}:{id}"),
+                    guest: Some(fly::AllocatedResources {
+                        cpu_kind: "shared".to_string(),
+                        cpus: container.limits.cpu,
+                        memory_mb: container.limits.mem,
+                        kernel_args: None,
+                    }),
+                    ..Default::default()
+                };
 
-            let machine = if machines.contains_key(&id) {
-                fly::update_machine(app_name, &machines.get(&id).unwrap().id, &machine_config)?
+                let machine = if let Some(machine) = machines.get(&id) {
+                    fly::update_machine(app_name, &machine.id, &machine_config)?
+                } else {
+                    fly::create_machine(app_name, &id, &machine_config)?
+                };
+                machine.id
             } else {
-                fly::create_machine(app_name, &id, &machine_config)?
+                if let Some(machine) = machines.get(&id) {
+                    machine.id.clone()
+                } else {
+                    continue;
+                }
             };
-            let machine_id = machine.id;
             let internal_url = format!("{machine_id}.vm.{}.internal", config.fly.app_name);
             if let Some(expose) = chall.expose.get(name) {
                 match expose {
@@ -94,7 +102,7 @@ pub async fn command(config: Config, challs: Option<Vec<String>>) -> Result<()> 
     }
 
     update_ingress(
-        config,
+        &config,
         &machines.get("ingress").unwrap().id,
         &repo,
         http_expose,
@@ -102,6 +110,11 @@ pub async fn command(config: Config, challs: Option<Vec<String>>) -> Result<()> 
     )
     .await?;
 
+    if let Some(rctf) = &config.rctf {
+        for chall in &challs {
+            rctf::update_chall(&rctf.url, chall).await?;
+        }
+    }
     return Ok(());
 }
 
@@ -164,7 +177,7 @@ async fn build_ingress(app_name: &str, repo: &str) -> Result<fly::MachineInfo> {
 }
 
 async fn update_ingress(
-    config: Config,
+    config: &Config,
     ingress_id: &str,
     repo: &str,
     http_expose: HashMap<String, String>,

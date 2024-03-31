@@ -5,6 +5,9 @@ hostname = "bcds.cyberclasscamp.com"
 org = "amateursctf-2024"
 app_name = "amateursctf-2024"
 
+[rctf]
+url = "http://localhost:8080"
+
 [[caddy.apps.tls.automation.policies]]
 [[caddy.apps.tls.automation.policies.issuers]]
 module = "acme"

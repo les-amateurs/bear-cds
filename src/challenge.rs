@@ -31,7 +31,15 @@ pub struct Challenge {
 #[serde(untagged)]
 pub enum Attachment {
     File(PathBuf),
-    Named { file: PathBuf, r#as: String },
+    Named {
+        file: PathBuf,
+        r#as: String,
+    },
+    Folder {
+        dir: PathBuf,
+        r#as: Option<String>,
+        exclude: Vec<PathBuf>,
+    },
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -148,36 +156,42 @@ impl Challenge {
         Ok(build_info)
     }
 
-    pub async fn push(&self, repo: &str) -> Result<()> {
-        for (name, _container) in &self.containers {
-            let image_name = self.container_id(name);
-            let new_tag = format!("{repo}:{image_name}");
-            DOCKER
-                .tag_image(
-                    &image_name,
-                    Some(bollard::image::TagImageOptions {
-                        repo: new_tag.clone(),
-                        ..Default::default()
-                    }),
-                )
-                .await?;
-            let mut push = DOCKER.push_image::<String>(
-                &new_tag,
-                None,
-                Some(DockerCredentials {
-                    // https://community.fly.io/t/push-to-fly-io-image-registry-via-docker-api/9132
-                    // I have NO idea why the username is x and why the password is the api token,
-                    // this took 2 hours to figure out and probably took a couple years off my life as well.
-                    username: Some("x".to_string()),
-                    password: Some(fly::FLY_API_TOKEN.clone()),
+    pub async fn push(&self, repo: &str, name: &str) -> Result<()> {
+        let image_name = self.container_id(name);
+        let new_tag = format!("{repo}:{image_name}");
+        DOCKER
+            .tag_image(
+                &image_name,
+                Some(bollard::image::TagImageOptions {
+                    repo: new_tag.clone(),
                     ..Default::default()
                 }),
-            );
+            )
+            .await?;
+        let mut push = DOCKER.push_image::<String>(
+            &new_tag,
+            None,
+            Some(DockerCredentials {
+                // https://community.fly.io/t/push-to-fly-io-image-registry-via-docker-api/9132
+                // I have NO idea why the username is x and why the password is the api token,
+                // this took 2 hours to figure out and probably took a couple years off my life as well.
+                username: Some("x".to_string()),
+                password: Some(fly::FLY_API_TOKEN.clone()),
+                ..Default::default()
+            }),
+        );
 
-            while let Some(push_step) = push.next().await {
-                println!("{:#?}", push_step);
-            }
+        while let Some(push_step) = push.next().await {
+            println!("{:#?}", push_step);
         }
+        Ok(())
+    }
+
+    pub async fn push_all(&self, repo: &str) -> Result<()> {
+        for (name, _) in &self.containers {
+            self.push(repo, name).await?;
+        }
+
         Ok(())
     }
 
