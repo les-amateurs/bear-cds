@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use base64::Engine;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf};
@@ -81,19 +82,25 @@ pub struct RctfFile {
     data: Vec<u8>,
 }
 
+#[derive(Deserialize)]
 pub struct RctfUploadedFile {
     name: String,
     url: String,
 }
 
+// TODO very unprofessional
+#[derive(Deserialize)]
+pub struct ScrewRustSometimes {
+    data: Vec<RctfUploadedFile>,
+}
+
 pub async fn upload_files(url: &str, files: Vec<RctfFile>) -> Result<Vec<RctfUploadedFile>> {
-    let payload: Vec<serde_json::Value> = files.into_iter().map(|f| ureq::json!({ "name": f.name, "data": format!("data:image/png;base64,{}", base64::encode(f.data)) })).collect();
-    ureq::post(&format!("{url}/api/v1/admin/upload"))
+    let payload: Vec<serde_json::Value> = files.into_iter().map(|f| ureq::json!({ "name": f.name, "data": format!("data:image/png;base64,{}", base64::engine::general_purpose::URL_SAFE.encode(f.data)) })).collect();
+    Ok(ureq::post(&format!("{url}/api/v1/admin/upload"))
         .set("Authorization", &AUTH_HEADER)
         .send_json(ureq::json!({
             "files": payload,
         }))?
-        .into_json()?["data"]
-        .unwrap()
-        .into()
+        .into_json::<ScrewRustSometimes>()?
+        .data)
 }
