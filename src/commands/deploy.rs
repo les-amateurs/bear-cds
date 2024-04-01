@@ -112,7 +112,7 @@ pub async fn command(config: Config, selected: Option<Vec<String>>) -> Result<()
 
     if let Some(rctf) = &config.rctf {
         for chall in &challs {
-            rctf::update_chall(&rctf.url, chall).await?;
+            rctf::update_chall(&rctf.url, &config.chall_root, chall).await?;
         }
     }
     return Ok(());
