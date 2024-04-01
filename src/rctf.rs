@@ -1,10 +1,10 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use serde::Deserialize;
-use std::{collections::HashMap, env, path::PathBuf};
+use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf};
 use ureq;
 
-use crate::challenge::Challenge;
+use crate::challenge::{Attachment, Challenge};
 
 lazy_static! {
     static ref RCTF_ADMIN_TOKEN: String =
@@ -17,9 +17,47 @@ pub struct Config {
     pub url: String,
 }
 
-pub async fn update_chall(url: &str, chall: &Challenge) -> Result<()> {
+pub async fn update_chall(url: &str, root: &PathBuf, chall: &Challenge) -> Result<()> {
     let category = chall.id.split("/").nth(0).unwrap();
     let id = format!("bcds-{}", chall.id.replace("/", "-"));
+    let mut files = vec![];
+    for attachment in &chall.provide {
+        match attachment {
+            Attachment::File(f) => {
+                let mut path: PathBuf = root.clone();
+                path.push(&chall.id);
+                path.push(f);
+                if path.is_file() {
+                    let mut buf = Vec::new();
+                    let mut file = File::open(&path)?;
+                    file.read_to_end(&mut buf);
+                    files.push(RctfFile {
+                        name: path.file_name().unwrap().to_str().unwrap().to_string(),
+                        data: buf,
+                    })
+                } else {
+                    Err(anyhow!("Provided file {} is not a file.", f.display()))?
+                }
+            }
+            Attachment::Named { file, r#as } => {
+                let mut path: PathBuf = root.clone();
+                path.push(&chall.id);
+                path.push(file);
+                if path.is_file() {
+                    let mut buf = Vec::new();
+                    let mut file = File::open(&path)?;
+                    file.read_to_end(&mut buf);
+                    files.push(RctfFile {
+                        name: r#as.clone(),
+                        data: buf,
+                    })
+                } else {
+                    Err(anyhow!("Provided file {} is not a file.", file.display()))?
+                }
+            }
+            _ => todo!("sorry, dir not implemented ;-;"),
+        }
+    }
     // TODO handle file uploads here
     ureq::put(&format!("{url}/api/v1/admin/challs/{id}"))
         .set("Authorization", &AUTH_HEADER)
@@ -36,4 +74,26 @@ pub async fn update_chall(url: &str, chall: &Challenge) -> Result<()> {
         }))?
         .into_string()?;
     Ok(())
+}
+
+pub struct RctfFile {
+    name: String,
+    data: Vec<u8>,
+}
+
+pub struct RctfUploadedFile {
+    name: String,
+    url: String,
+}
+
+pub async fn upload_files(url: &str, files: Vec<RctfFile>) -> Result<Vec<RctfUploadedFile>> {
+    let payload: Vec<serde_json::Value> = files.into_iter().map(|f| ureq::json!({ "name": f.name, "data": format!("data:image/png;base64,{}", base64::encode(f.data)) })).collect();
+    ureq::post(&format!("{url}/api/v1/admin/upload"))
+        .set("Authorization", &AUTH_HEADER)
+        .send_json(ureq::json!({
+            "files": payload,
+        }))?
+        .into_json()?["data"]
+        .unwrap()
+        .into()
 }

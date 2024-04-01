@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -117,7 +117,8 @@ pub fn create_machine(
         .send_json(ureq::json!({
             "name": name,
             "config": machine_config,
-        }))?
+        }))
+        .map_err(|err| anyhow!("{:?}", err.into_response().unwrap().into_string()))?
         .into_json()?;
 
     Ok(json)
@@ -130,7 +131,8 @@ pub fn update_machine(app: &str, id: &str, machine_config: &MachineConfig) -> Re
         .set("Authorization", &AUTH_HEADER)
         .send_json(ureq::json!({
             "config": machine_config,
-        }))?
+        }))
+        .map_err(|err| anyhow!("{:?}", err.into_response().unwrap().into_string()))?
         .into_json()?;
 
     Ok(json)
