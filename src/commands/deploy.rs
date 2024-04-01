@@ -2,46 +2,82 @@ use std::collections::HashMap;
 
 use crate::{
     challenge::{Challenge, Expose},
-    fly, Config, DOCKER,
+    fly, rctf, Config, DOCKER,
 };
 use anyhow::{anyhow, Result};
 use bollard::{auth::DockerCredentials, image::BuildImageOptions};
 use futures::stream::StreamExt;
 use serde_json::json;
 
-pub async fn command(config: Config) -> Result<()> {
+pub async fn command(config: Config, selected: Option<Vec<String>>) -> Result<()> {
     fly::ensure_app(&config.fly)?;
     let app_name = &config.fly.app_name;
     let challs = Challenge::get_all(&config.chall_root)?;
+    match challs.len() {
+        1 => println!("Deploying {}", challs[0].id),
+        2 => println!("Deploying {} and {}", challs[0].id, challs[1].id),
+        _ => {
+            println!(
+                "Deploying {}, {} and {}",
+                challs[0].id,
+                challs[1].id,
+                if challs.len() > 3 {
+                    "more"
+                } else {
+                    &challs[2].id
+                },
+            )
+        }
+    }
     let repo = &format!("registry.fly.io/{}", app_name);
-    let mut machines = fly::machines_name_to_id(app_name)?;
+    let mut machines = fly::list_machines(app_name)?
+        .into_iter()
+        .map(|machine| (machine.name.clone(), machine))
+        .collect::<HashMap<String, fly::MachineInfo>>();
+    println!("{:#?}", machines);
 
     let mut http_expose: HashMap<String, String> = HashMap::new();
     let mut tcp_expose: HashMap<u32, (String, String)> = HashMap::new();
-    for chall in challs {
-        chall.push(&repo).await?;
+    for chall in &challs {
         for (name, container) in &chall.containers {
             let id = chall.container_id(&name);
-            if container.limits.mem.unwrap_or_default() % 256 != 0 {
-                Err(anyhow!("Memory must be a multiple of 256."))?;
-            }
-            let machine_config = fly::MachineConfig {
-                image: format!("{repo}:{id}"),
-                guest: Some(fly::AllocatedResources {
-                    cpu_kind: "shared".to_string(),
-                    cpus: container.limits.cpu,
-                    memory_mb: container.limits.mem,
-                    kernel_args: None,
-                }),
-                ..Default::default()
-            };
+            let machine_id = if selected.is_none()
+                || challs
+                    .iter()
+                    .any(|c| selected.as_ref().unwrap().contains(&c.id))
+            {
+                chall.push(&repo, name).await?;
+                // println!(
+                //     "{:#?}",
+                //     DOCKER.inspect_image(&format!("{repo}:{id}")).await?
+                // );
+                if container.limits.mem.unwrap_or_default() % 256 != 0 {
+                    Err(anyhow!("Memory must be a multiple of 256."))?;
+                }
+                let machine_config = fly::MachineConfig {
+                    image: format!("{repo}:{id}"),
+                    guest: Some(fly::AllocatedResources {
+                        cpu_kind: "shared".to_string(),
+                        cpus: container.limits.cpu,
+                        memory_mb: container.limits.mem,
+                        kernel_args: None,
+                    }),
+                    ..Default::default()
+                };
 
-            let json = if machines.contains_key(&id) {
-                fly::update_machine(app_name, machines.get(&id).unwrap(), &machine_config)?
+                let machine = if let Some(machine) = machines.get(&id) {
+                    fly::update_machine(app_name, &machine.id, &machine_config)?
+                } else {
+                    fly::create_machine(app_name, &id, &machine_config)?
+                };
+                machine.id
             } else {
-                fly::create_machine(app_name, &id, &machine_config)?
+                if let Some(machine) = machines.get(&id) {
+                    machine.id.clone()
+                } else {
+                    continue;
+                }
             };
-            let machine_id = json["id"].as_str().unwrap();
             let internal_url = format!("{machine_id}.vm.{}.internal", config.fly.app_name);
             if let Some(expose) = chall.expose.get(name) {
                 match expose {
@@ -58,22 +94,27 @@ pub async fn command(config: Config) -> Result<()> {
 
     if !machines.contains_key("ingress") {
         println!("Caddy server not found. Building and deploying.");
-        let machine_id = build_ingress(app_name, &repo).await?;
+        let machine = build_ingress(app_name, &repo).await?;
         println!("Waiting on ingress to start");
-        println!("{:?}", fly::wait_for_machine(app_name, &machine_id));
+        println!("{:?}", fly::wait_for_machine(app_name, &machine.id));
         println!("Ingress Created");
-        machines.insert("ingress".to_string(), machine_id.to_string());
+        machines.insert("ingress".to_string(), machine);
     }
 
     update_ingress(
-        config,
-        machines.get("ingress").unwrap(),
+        &config,
+        &machines.get("ingress").unwrap().id,
         &repo,
         http_expose,
         tcp_expose,
     )
     .await?;
 
+    if let Some(rctf) = &config.rctf {
+        for chall in &challs {
+            rctf::update_chall(&rctf.url, chall).await?;
+        }
+    }
     return Ok(());
 }
 
@@ -88,7 +129,7 @@ fn merge(a: &mut serde_json::Value, b: &serde_json::Value) {
     }
 }
 // TODO merge these two functions into one
-async fn build_ingress(app_name: &str, repo: &str) -> Result<String> {
+async fn build_ingress(app_name: &str, repo: &str) -> Result<fly::MachineInfo> {
     let tag = format!("{repo}:ingress");
     let ingress_tar = include_bytes!("../../caddy.tar.gz").to_vec();
     let mut build = DOCKER.build_image(
@@ -122,7 +163,7 @@ async fn build_ingress(app_name: &str, repo: &str) -> Result<String> {
         println!("{:#?}", push_step);
     }
 
-    let json = fly::create_machine(
+    let machine = fly::create_machine(
         app_name,
         "ingress",
         &fly::MachineConfig {
@@ -132,11 +173,11 @@ async fn build_ingress(app_name: &str, repo: &str) -> Result<String> {
         },
     )?;
 
-    Ok(json["id"].as_str().unwrap().to_string())
+    Ok(machine)
 }
 
 async fn update_ingress(
-    config: Config,
+    config: &Config,
     ingress_id: &str,
     repo: &str,
     http_expose: HashMap<String, String>,
@@ -145,23 +186,34 @@ async fn update_ingress(
     let tag = format!("{repo}:ingress");
     let mut services = Vec::new();
     for (port, _) in &tcp_expose {
-        services.push(json!({
-            "ports": [{ "port": port }],
-            "protocol": "tcp",
-            "internal_port": port,
-        }))
+        services.push(fly::MachineService {
+            ports: vec![fly::MachinePort {
+                port: Some(*port),
+                ..Default::default()
+            }],
+            protocol: "tcp".to_string(),
+            internal_port: *port,
+        });
     }
-    services.push(json!({
-        "ports": [{ "port": 443 }],
-        "protocol": "tcp",
-        "internal_port": 443,
-    }));
 
-    services.push(json!({
-        "ports": [{ "port": 80 }],
-        "protocol": "tcp",
-        "internal_port": 80,
-    }));
+    services.push(fly::MachineService {
+        ports: vec![fly::MachinePort {
+            port: Some(80),
+            ..Default::default()
+        }],
+        protocol: "tcp".to_string(),
+        internal_port: 80,
+    });
+
+    services.push(fly::MachineService {
+        ports: vec![fly::MachinePort {
+            port: Some(443),
+            ..Default::default()
+        }],
+        protocol: "tcp".to_string(),
+        internal_port: 443,
+    });
+
     println!(
         "{:#?}",
         fly::update_machine(
@@ -176,10 +228,7 @@ async fn update_ingress(
     );
 
     println!("Waiting on ingress to start");
-    println!(
-        "{:?}",
-        fly::wait_for_machine(&config.fly.app_name, &ingress_id)
-    );
+    fly::wait_for_machine(&config.fly.app_name, &ingress_id)?;
     println!("Ingress Updated");
     let mut http_expose_json = Vec::with_capacity(http_expose.len());
     for (sub, target) in http_expose {

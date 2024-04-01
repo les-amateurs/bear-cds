@@ -1,18 +1,21 @@
 use anyhow::Result;
 use bollard::Docker;
 
+use challenge::Challenge;
 use clap::{Parser, Subcommand};
-use colored::Colorize;
 use dotenvy;
+use futures::StreamExt;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_json::json;
 use std::{fs, path::PathBuf, process::exit};
+use temp_dir::TempDir;
 use toml;
 
 mod challenge;
 mod commands;
 mod fly;
+mod rctf;
 
 lazy_static! {
     pub static ref DOCKER: Docker =
@@ -30,6 +33,7 @@ macro_rules! print_error {
 #[derive(Deserialize)]
 pub struct Config {
     pub fly: fly::Config,
+    pub rctf: Option<rctf::Config>,
     #[serde(default = "default_chall_root")]
     pub chall_root: PathBuf,
     pub hostname: String,
@@ -58,18 +62,24 @@ struct Args {
 }
 
 #[derive(Debug, Subcommand)]
-enum Commands {
+pub enum Commands {
     /// List all challenges
     List,
 
     /// Build all challenges
-    Build,
-
-    /// Build challenges sequentially
-    SlowBuild,
+    Build {
+        /// Max number of challenges to build in parellel
+        #[arg(long, default_value = "4")]
+        threads: usize,
+        #[arg()]
+        challs: Option<Vec<String>>,
+    },
 
     // Deploy all challenges to fly.io
-    Deploy,
+    Deploy {
+        #[arg()]
+        challs: Option<Vec<String>>,
+    },
 }
 
 #[tokio::main]
@@ -97,17 +107,43 @@ async fn main() -> Result<()> {
 
     match args.command {
         Commands::List => commands::list::command(config)?,
-        Commands::Build => {
-            let res = challenge::Challenge::build_all(config.chall_root).await?;
-            println!("{:#?}", res);
+        Commands::Build { threads, challs } => {
+            let tmp_dir = TempDir::new().unwrap();
+            let challs = if let Some(challs) = challs {
+                Challenge::get_some(&config.chall_root, challs)?
+            } else {
+                Challenge::get_all(&config.chall_root)?
+            };
+            match challs.len() {
+                1 => println!("Building {}", challs[0].id),
+                2 => println!("Building {} and {}", challs[0].id, challs[1].id),
+                _ => {
+                    println!(
+                        "Building {}, {} and {}",
+                        challs[0].id,
+                        challs[1].id,
+                        if challs.len() > 3 {
+                            "more"
+                        } else {
+                            &challs[2].id
+                        },
+                    )
+                }
+            }
+
+            futures::stream::iter(
+                challs
+                    .into_iter()
+                    .map(|c| c.build(&config.chall_root, &tmp_dir)),
+            )
+            .buffer_unordered(threads)
+            .collect::<Vec<Result<Vec<_>>>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<Vec<_>>>>()?;
             ()
         }
-        Commands::SlowBuild => {
-            let res = challenge::Challenge::build_all_slow(config.chall_root).await?;
-            println!("{:#?}", res);
-            ()
-        }
-        Commands::Deploy => debug(commands::deploy::command(config).await)?,
+        Commands::Deploy { challs } => commands::deploy::command(config, challs).await?,
     }
 
     Ok(())

@@ -31,7 +31,15 @@ pub struct Challenge {
 #[serde(untagged)]
 pub enum Attachment {
     File(PathBuf),
-    Named { file: PathBuf, r#as: String },
+    Named {
+        file: PathBuf,
+        r#as: String,
+    },
+    Folder {
+        dir: PathBuf,
+        r#as: Option<String>,
+        exclude: Vec<PathBuf>,
+    },
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -57,7 +65,7 @@ pub enum Expose {
 
 impl Challenge {
     pub fn parse(chall_dir: PathBuf) -> Result<Challenge> {
-        let file_data = fs::read_to_string(&chall_dir.join("challenge.toml"))?;
+        let file_data = fs::read_to_string(&chall_dir.join("challenge.toml")).map_err(|_| anyhow!("Failed to read challenge.toml, Make sure it exists at the root of your challenge directory"))?;
         let mut toml: toml::Table = toml::from_str(&file_data)?;
         let mut id_parts = chall_dir
             .iter()
@@ -74,12 +82,29 @@ impl Challenge {
             .map_err(|e| anyhow!("failed to parse parsing {id}: {e}"))?)
     }
 
+    pub fn get(root: &PathBuf, chall: String) -> Result<Challenge> {
+        let dir = root.as_path().join(chall);
+        if !dir.is_dir() {
+            return Err(anyhow!("{} is not a directory", dir.display()));
+        }
+
+        Challenge::parse(dir)
+    }
+
     pub fn get_all(root: &PathBuf) -> Result<Vec<Challenge>> {
         let paths = get_chall_paths(root)?;
         paths
             .into_iter()
             .map(|path| Challenge::parse(path))
             .collect::<Result<Vec<Challenge>, _>>()
+    }
+
+    pub fn get_some(root: &PathBuf, challs: Vec<String>) -> Result<Vec<Challenge>> {
+        let mut parsed_challs = Vec::new();
+        for chall in challs {
+            parsed_challs.push(Challenge::get(&root, chall)?);
+        }
+        Ok(parsed_challs)
     }
 
     // TODO return type bad >:(
@@ -131,58 +156,42 @@ impl Challenge {
         Ok(build_info)
     }
 
-    pub async fn build_all(root: PathBuf) -> Result<Vec<Vec<bollard::models::BuildInfo>>> {
-        let tmp_dir = TempDir::new().unwrap();
-        let challs = Challenge::get_all(&root)?;
-        print!("{:#?}", challs);
-        futures::future::join_all(challs.into_iter().map(|chall| chall.build(&root, &tmp_dir)))
-            .await
-            .into_iter()
-            .collect()
-    }
-
-    pub async fn build_all_slow(root: PathBuf) -> Result<Vec<Vec<bollard::models::BuildInfo>>> {
-        let tmp_dir = TempDir::new().unwrap();
-        let challs = Challenge::get_all(&root)?;
-        print!("{:#?}", challs);
-        let mut models = Vec::new();
-        for chall in challs {
-            models.push(chall.build(&root, &tmp_dir).await?);
-        }
-
-        Ok(models)
-    }
-
-    pub async fn push(&self, repo: &str) -> Result<()> {
-        for (name, _container) in &self.containers {
-            let image_name = self.container_id(name);
-            let new_tag = format!("{repo}:{image_name}");
-            DOCKER
-                .tag_image(
-                    &image_name,
-                    Some(bollard::image::TagImageOptions {
-                        repo: new_tag.clone(),
-                        ..Default::default()
-                    }),
-                )
-                .await?;
-            let mut push = DOCKER.push_image::<String>(
-                &new_tag,
-                None,
-                Some(DockerCredentials {
-                    // https://community.fly.io/t/push-to-fly-io-image-registry-via-docker-api/9132
-                    // I have NO idea why the username is x and why the password is the api token,
-                    // this took 2 hours to figure out and probably took a couple years off my life as well.
-                    username: Some("x".to_string()),
-                    password: Some(fly::FLY_API_TOKEN.clone()),
+    pub async fn push(&self, repo: &str, name: &str) -> Result<()> {
+        let image_name = self.container_id(name);
+        let new_tag = format!("{repo}:{image_name}");
+        DOCKER
+            .tag_image(
+                &image_name,
+                Some(bollard::image::TagImageOptions {
+                    repo: new_tag.clone(),
                     ..Default::default()
                 }),
-            );
+            )
+            .await?;
+        let mut push = DOCKER.push_image::<String>(
+            &new_tag,
+            None,
+            Some(DockerCredentials {
+                // https://community.fly.io/t/push-to-fly-io-image-registry-via-docker-api/9132
+                // I have NO idea why the username is x and why the password is the api token,
+                // this took 2 hours to figure out and probably took a couple years off my life as well.
+                username: Some("x".to_string()),
+                password: Some(fly::FLY_API_TOKEN.clone()),
+                ..Default::default()
+            }),
+        );
 
-            while let Some(push_step) = push.next().await {
-                println!("{:#?}", push_step);
-            }
+        while let Some(push_step) = push.next().await {
+            println!("{:#?}", push_step);
         }
+        Ok(())
+    }
+
+    pub async fn push_all(&self, repo: &str) -> Result<()> {
+        for (name, _) in &self.containers {
+            self.push(repo, name).await?;
+        }
+
         Ok(())
     }
 
