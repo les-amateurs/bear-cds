@@ -118,7 +118,12 @@ pub fn create_machine(
             "name": name,
             "config": machine_config,
         }))
-        .map_err(|err| anyhow!("{:?}", err.into_response().unwrap().into_string()))?
+        .map_err(|err| {
+            anyhow!(
+                "Create machine failed: {:?}",
+                err.into_response().unwrap().into_string()
+            )
+        })?
         .into_json()?;
 
     Ok(json)
@@ -132,7 +137,12 @@ pub fn update_machine(app: &str, id: &str, machine_config: &MachineConfig) -> Re
         .send_json(ureq::json!({
             "config": machine_config,
         }))
-        .map_err(|err| anyhow!("{:?}", err.into_response().unwrap().into_string()))?
+        .map_err(|err| {
+            anyhow!(
+                "Update machine failed: {:?}",
+                err.into_response().unwrap().into_string()
+            )
+        })?
         .into_json()?;
 
     Ok(json)

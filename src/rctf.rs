@@ -47,7 +47,7 @@ pub async fn update_chall(url: &str, root: &PathBuf, chall: &Challenge) -> Resul
                 if path.is_file() {
                     let mut buf = Vec::new();
                     let mut file = File::open(&path)?;
-                    file.read_to_end(&mut buf);
+                    file.read_to_end(&mut buf)?;
                     files.push(RctfFile {
                         name: r#as.clone(),
                         data: buf,
@@ -72,7 +72,13 @@ pub async fn update_chall(url: &str, root: &PathBuf, chall: &Challenge) -> Resul
                 "points": { "min": 100, "max": 500 },
                 "tiebreakEligible": true,
             }
-        }))?
+        }))
+        .map_err(|err| {
+            anyhow!(
+                "Update challenge failed (rctf): {:?}",
+                err.into_response().unwrap().into_string()
+            )
+        })?
         .into_string()?;
     Ok(())
 }
