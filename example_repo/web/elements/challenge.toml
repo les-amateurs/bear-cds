@@ -6,7 +6,7 @@ description = """
 """
 flag = "amateursCTF{wh0_s@ys_goph3r_i5nt_web?}"
 
-provide = ["main.go", { file = "bot/main.go", as = "bot.go" }]
+provide = ["challenge.toml"]
 
 [containers.main]
 build = "."

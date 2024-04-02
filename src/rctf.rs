@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use base64::Engine;
 use lazy_static::lazy_static;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf};
 use ureq;
 
@@ -61,6 +61,8 @@ pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<(
         }
     }
 
+    let uploaded_files = upload_files(&rctf.url, files).await?;
+
     let mut description = chall.description.clone();
     for (name, expose) in &chall.expose {
         let url = match expose {
@@ -70,7 +72,6 @@ pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<(
         description = description.replace(&format!("{{{name}.url}}",), &url);
     }
 
-    // TODO handle file uploads here
     ureq::put(&format!("{}/api/v1/admin/challs/{id}", rctf.url))
         .set("Authorization", &AUTH_HEADER)
         .send_json(ureq::json!({
@@ -81,6 +82,7 @@ pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<(
                 "flag": chall.flag,
                 "name": chall.name,
                 "points": { "min": 100, "max": 500 },
+                "files": uploaded_files,
                 "tiebreakEligible": true,
             }
         }))
@@ -99,7 +101,7 @@ pub struct RctfFile {
     data: Vec<u8>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct RctfUploadedFile {
     name: String,
     url: String,
