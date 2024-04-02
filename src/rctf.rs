@@ -5,7 +5,7 @@ use serde::Deserialize;
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf};
 use ureq;
 
-use crate::challenge::{Attachment, Challenge};
+use crate::challenge::{Attachment, Challenge, Expose};
 
 lazy_static! {
     static ref RCTF_ADMIN_TOKEN: String =
@@ -18,20 +18,21 @@ pub struct Config {
     pub url: String,
 }
 
-pub async fn update_chall(url: &str, root: &PathBuf, chall: &Challenge) -> Result<()> {
+pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<()> {
+    let rctf = config.rctf.as_ref().unwrap();
     let category = chall.id.split("/").nth(0).unwrap();
     let id = format!("bcds-{}", chall.id.replace("/", "-"));
     let mut files = vec![];
     for attachment in &chall.provide {
         match attachment {
             Attachment::File(f) => {
-                let mut path: PathBuf = root.clone();
+                let mut path: PathBuf = config.chall_root.clone();
                 path.push(&chall.id);
                 path.push(f);
                 if path.is_file() {
                     let mut buf = Vec::new();
                     let mut file = File::open(&path)?;
-                    file.read_to_end(&mut buf);
+                    file.read_to_end(&mut buf)?;
                     files.push(RctfFile {
                         name: path.file_name().unwrap().to_str().unwrap().to_string(),
                         data: buf,
@@ -41,7 +42,7 @@ pub async fn update_chall(url: &str, root: &PathBuf, chall: &Challenge) -> Resul
                 }
             }
             Attachment::Named { file, r#as } => {
-                let mut path: PathBuf = root.clone();
+                let mut path: PathBuf = config.chall_root.clone();
                 path.push(&chall.id);
                 path.push(file);
                 if path.is_file() {
@@ -59,14 +60,24 @@ pub async fn update_chall(url: &str, root: &PathBuf, chall: &Challenge) -> Resul
             _ => todo!("sorry, dir not implemented ;-;"),
         }
     }
+
+    let mut description = chall.description.clone();
+    for (name, expose) in &chall.expose {
+        let url = match expose {
+            Expose::Tcp { tcp, .. } => format!("nc {} {tcp}", config.hostname),
+            Expose::Http { http, .. } => format!("http://{http}.{}", config.hostname),
+        };
+        description = description.replace(&format!("{{{name}.url}}",), &url);
+    }
+
     // TODO handle file uploads here
-    ureq::put(&format!("{url}/api/v1/admin/challs/{id}"))
+    ureq::put(&format!("{}/api/v1/admin/challs/{id}", rctf.url))
         .set("Authorization", &AUTH_HEADER)
         .send_json(ureq::json!({
             "data": {
                 "author": chall.author,
                 "category": category,
-                "description": chall.description,
+                "description": description,
                 "flag": chall.flag,
                 "name": chall.name,
                 "points": { "min": 100, "max": 500 },
