@@ -1,8 +1,10 @@
 # this is a challenge toml
 name = "go-gopher"
 author = "voxal"
-description = """
- ...
+description = """wow cool challenge  
+...  
+okay here is the url {{main.url}}  
+and here is another {{tcp.url}}
 """
 flag = "amateursCTF{wh0_s@ys_goph3r_i5nt_web?}"
 
@@ -16,4 +18,10 @@ ports = [3000]
 [expose.main]
 target = 3000
 http = "silly-goose"
+
+[expose.tcp]
+target = 1111
+tcp = 1373
+
+
 

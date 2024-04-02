@@ -66,10 +66,13 @@ pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<(
     let mut description = chall.description.clone();
     for (name, expose) in &chall.expose {
         let url = match expose {
-            Expose::Tcp { tcp, .. } => format!("nc {} {tcp}", config.hostname),
-            Expose::Http { http, .. } => format!("http://{http}.{}", config.hostname),
+            Expose::Tcp { tcp, .. } => format!("`nc {} {tcp}`", config.hostname),
+            Expose::Http { http, .. } => format!(
+                "[http://{http}.{}](http://{http}.{})",
+                config.hostname, config.hostname
+            ),
         };
-        description = description.replace(&format!("{{{name}.url}}",), &url);
+        description = description.replace(&format!("{{{{{name}.url}}}}",), &url);
     }
 
     ureq::put(&format!("{}/api/v1/admin/challs/{id}", rctf.url))
