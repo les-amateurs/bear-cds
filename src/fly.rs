@@ -118,7 +118,12 @@ pub fn create_machine(
             "name": name,
             "config": machine_config,
         }))
-        .map_err(|err| anyhow!("{:?}", err.into_response().unwrap().into_string()))?
+        .map_err(|err| {
+            anyhow!(
+                "Create machine failed: {:?}",
+                err.into_response().unwrap().into_string()
+            )
+        })?
         .into_json()?;
 
     Ok(json)
