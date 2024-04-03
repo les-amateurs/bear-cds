@@ -132,7 +132,15 @@ pub fn update_machine(app: &str, id: &str, machine_config: &MachineConfig) -> Re
         .send_json(ureq::json!({
             "config": machine_config,
         }))
-        .map_err(|err| anyhow!("{:?}", err.into_response().unwrap().into_string()))?
+        .map_err(|err| {
+            anyhow!(
+                "{:?}",
+                match err.into_response() {
+                    Some(resp) => resp.into_string(),
+                    None => Ok(String::from("None???")),
+                }
+            )
+        })?
         .into_json()?;
 
     Ok(json)
