@@ -8,11 +8,7 @@ and here is another {{tcp.url}}
 """
 flag = "amateursCTF{wh0_s@ys_goph3r_i5nt_web?}"
 
-<<<<<<< HEAD
-provide = []
-=======
 provide = ["challenge.toml"]
->>>>>>> bb36066664ce09427afb3a74b7aae13eb448cd29
 
 [containers.main]
 build = "."
