@@ -124,9 +124,9 @@ impl Challenge {
                 tmp_dir.child(format!("{}-{}.docker.tar", self.id.replace("/", "-"), name));
             let tar_file = File::create(&tar_path)?;
             let mut tar = tar::Builder::new(tar_file);
-            tar.append_dir_all(".", &build_path).map_err(|_| {
+            tar.append_dir_all(".", &build_path).map_err(|e| {
                 anyhow!(
-                    "Failed to read {}. Make sure it exists and is a directory.",
+                    "Failed to read {}. Make sure it exists and is a directory.\n{e:?}",
                     build_path.display()
                 )
             })?;
