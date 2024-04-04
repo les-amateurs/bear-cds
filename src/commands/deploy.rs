@@ -12,7 +12,7 @@ use serde_json::json;
 pub async fn command(config: Config, selected: Option<Vec<String>>) -> Result<()> {
     fly::ensure_app(&config.fly)?;
     let app_name = &config.fly.app_name;
-    let challs = Challenge::get_all(&config.chall_root)?;
+    let challs: Vec<Challenge> = Challenge::get_all(&config.chall_root)?;
     match challs.len() {
         1 => println!("Deploying {}", challs[0].id),
         2 => println!("Deploying {} and {}", challs[0].id, challs[1].id),
