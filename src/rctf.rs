@@ -86,7 +86,7 @@ pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<(
                 "author": chall.author,
                 "category": category,
                 "description": description,
-                "flag": chall.flag,
+                "flag": chall.get_flag(&config.chall_root)?,
                 "name": chall.name,
                 "points": { "min": 100, "max": 500 },
                 "files": uploaded_files,
@@ -126,7 +126,13 @@ pub async fn upload_files(url: &str, files: Vec<RctfFile>) -> Result<Vec<RctfUpl
         .set("Authorization", &AUTH_HEADER)
         .send_json(ureq::json!({
             "files": payload,
-        }))?
+        }))
+        .map_err(|err| {
+            anyhow!(
+                "Upload files failed (rctf): {:?}",
+                err.into_response().unwrap().into_string()
+            )
+        })?
         .into_json::<ScrewRustSometimes>()?
         .data)
 }
