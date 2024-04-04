@@ -79,6 +79,30 @@ impl Challenge {
         id_parts.reverse();
         let id = id_parts.join("/");
         toml.insert(String::from("id"), toml::Value::String(id.clone()));
+
+        let flag_value = toml.get("flag");
+        if flag_value.is_none() {
+            return Err(anyhow!("challenge must have a flag"));
+        }
+
+        let flag = match flag_value.unwrap() {
+            toml::Value::String(flag) => flag.clone(),
+            toml::Value::Table(table) => {
+                if !table.contains_key("file") {
+                    return Err(anyhow!("flag must be a string or specify flag.file"));
+                }
+
+                let file_value = table.get("file").unwrap();
+                if let toml::Value::String(flag_path) = file_value {
+                    fs::read_to_string(chall_dir.join(flag_path))?
+                } else {
+                    return Err(anyhow!("flag.file is not a string"));
+                }
+            }
+            _ => return Err(anyhow!("strange flag value")),
+        };
+        toml.insert(String::from("flag"), toml::Value::String(flag));
+
         Ok(toml
             .try_into()
             .map_err(|e| anyhow!("failed to parse parsing {id}: {e}"))?)
