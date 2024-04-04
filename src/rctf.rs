@@ -22,51 +22,55 @@ pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<(
     let rctf = config.rctf.as_ref().unwrap();
     let category = chall.id.split("/").nth(0).unwrap();
     let id = format!("bcds-{}", chall.id.replace("/", "-"));
-    let mut files = vec![];
-    for attachment in &chall.provide {
-        match attachment {
-            Attachment::File(f) => {
-                let mut path: PathBuf = config.chall_root.clone();
-                path.push(&chall.id);
-                path.push(f);
-                if path.is_file() {
-                    let mut buf = Vec::new();
-                    let mut file = File::open(&path)?;
-                    file.read_to_end(&mut buf)?;
-                    files.push(RctfFile {
-                        name: path.file_name().unwrap().to_str().unwrap().to_string(),
-                        data: buf,
-                    })
-                } else {
-                    Err(anyhow!("Provided file {} is not a file.", f.display()))?
+    let uploaded_files = if let Some(attachments) = &chall.provide {
+        let mut files = vec![];
+        for attachment in attachments {
+            match attachment {
+                Attachment::File(f) => {
+                    let mut path: PathBuf = config.chall_root.clone();
+                    path.push(&chall.id);
+                    path.push(f);
+                    if path.is_file() {
+                        let mut buf = Vec::new();
+                        let mut file = File::open(&path)?;
+                        file.read_to_end(&mut buf)?;
+                        files.push(RctfFile {
+                            name: path.file_name().unwrap().to_str().unwrap().to_string(),
+                            data: buf,
+                        })
+                    } else {
+                        Err(anyhow!("Provided file {} is not a file.", f.display()))?
+                    }
                 }
-            }
-            Attachment::Named { file, r#as } => {
-                let mut path: PathBuf = config.chall_root.clone();
-                path.push(&chall.id);
-                path.push(file);
-                if path.is_file() {
-                    let mut buf = Vec::new();
-                    let mut file = File::open(&path)?;
-                    file.read_to_end(&mut buf)?;
-                    files.push(RctfFile {
-                        name: r#as.clone(),
-                        data: buf,
-                    })
-                } else {
-                    Err(anyhow!("Provided file {} is not a file.", file.display()))?
+                Attachment::Named { file, r#as } => {
+                    let mut path: PathBuf = config.chall_root.clone();
+                    path.push(&chall.id);
+                    path.push(file);
+                    if path.is_file() {
+                        let mut buf = Vec::new();
+                        let mut file = File::open(&path)?;
+                        file.read_to_end(&mut buf)?;
+                        files.push(RctfFile {
+                            name: r#as.clone(),
+                            data: buf,
+                        })
+                    } else {
+                        Err(anyhow!("Provided file {} is not a file.", file.display()))?
+                    }
                 }
+                _ => todo!("sorry, dir not implemented ;-;"),
             }
-            _ => todo!("sorry, dir not implemented ;-;"),
         }
-    }
 
-    let uploaded_files = upload_files(&rctf.url, files).await?;
+        upload_files(&rctf.url, files).await?
+    } else {
+        vec![]
+    };
 
     let mut description = chall.description.clone();
     for (name, expose) in &chall.expose {
         let url = match expose {
-            Expose::Tcp { tcp, .. } => format!("`nc {}.{} {tcp}`", chall.name, config.hostname),
+            Expose::Tcp { tcp, .. } => format!("`nc {} {tcp}`", config.hostname),
             Expose::Http { http, .. } => format!(
                 "[http://{http}.{}](http://{http}.{})",
                 config.hostname, config.hostname

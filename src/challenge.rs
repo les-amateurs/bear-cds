@@ -22,7 +22,8 @@ pub struct Challenge {
     pub author: String,
     pub description: String,
     pub flag: String,
-    pub provide: Vec<Attachment>,
+    pub hidden: Option<bool>,
+    pub provide: Option<Vec<Attachment>>,
     pub containers: HashMap<String, Container>,
     pub expose: HashMap<String, Expose>,
 }
@@ -46,7 +47,8 @@ pub enum Attachment {
 pub struct Container {
     pub build: PathBuf,
     pub limits: Limits,
-    ports: Vec<u16>,
+    ports: Option<Vec<u32>>,
+    pub env: Option<HashMap<String, String>>,
 }
 
 // im honestly uncertain what types these should be so im using these

@@ -62,6 +62,7 @@ pub async fn command(config: Config, selected: Option<Vec<String>>) -> Result<()
                         memory_mb: container.limits.mem,
                         kernel_args: None,
                     }),
+                    env: container.env.clone(),
                     ..Default::default()
                 };
 
@@ -112,7 +113,10 @@ pub async fn command(config: Config, selected: Option<Vec<String>>) -> Result<()
 
     if let Some(rctf) = &config.rctf {
         for chall in &challs {
-            rctf::update_chall(&config, chall).await?;
+            if let Some(true) = chall.hidden {
+            } else {
+                rctf::update_chall(&config, chall).await?;
+            }
         }
     }
     return Ok(());
