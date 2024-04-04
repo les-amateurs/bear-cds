@@ -22,6 +22,7 @@ pub struct Challenge {
     pub author: String,
     pub description: String,
     pub flag: String,
+    pub hidden: Option<bool>,
     pub provide: Option<Vec<Attachment>>,
     pub containers: HashMap<String, Container>,
     pub expose: HashMap<String, Expose>,
