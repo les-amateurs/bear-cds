@@ -24,8 +24,14 @@ pub struct Challenge {
     pub flag: String,
     pub hidden: Option<bool>,
     pub provide: Option<Vec<Attachment>>,
+    #[serde(default = "empty")]
     pub containers: HashMap<String, Container>,
+    #[serde(default = "empty")]
     pub expose: HashMap<String, Expose>,
+}
+
+fn empty<K, V>() -> HashMap<K, V> {
+    HashMap::new()
 }
 
 #[derive(Deserialize, Debug, Clone)]
