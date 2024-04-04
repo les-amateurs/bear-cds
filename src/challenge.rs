@@ -38,7 +38,7 @@ fn empty<K, V>() -> HashMap<K, V> {
 #[serde(untagged)]
 pub enum Flag {
     Raw(String),
-    File { path: PathBuf },
+    File { file: PathBuf },
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -218,7 +218,7 @@ impl Challenge {
     pub fn get_flag(&self, root: &PathBuf) -> Result<String> {
         match &self.flag {
             Flag::Raw(flag) => Ok(flag.clone()),
-            Flag::File { path } => Ok(fs::read_to_string(root.join(&self.id).join(path))?),
+            Flag::File { file } => Ok(fs::read_to_string(root.join(&self.id).join(file))?),
         }
     }
 }
