@@ -139,8 +139,11 @@ pub fn update_machine(app: &str, id: &str, machine_config: &MachineConfig) -> Re
         }))
         .map_err(|err| {
             anyhow!(
-                "Update machine failed: {:?}",
-                err.into_response().unwrap().into_string()
+                "{:?}",
+                match err.into_response() {
+                    Some(resp) => resp.into_string(),
+                    None => Ok(String::from("None???")),
+                }
             )
         })?
         .into_json()?;

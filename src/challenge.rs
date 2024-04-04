@@ -134,7 +134,7 @@ impl Challenge {
 
             let options = BuildImageOptions {
                 dockerfile: "Dockerfile",
-                t: &self.container_id(name).to_lowercase(),
+                t: &self.container_id(name),
                 rm: true,
                 ..Default::default()
             };
