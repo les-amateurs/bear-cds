@@ -62,7 +62,7 @@ pub async fn command(config: Config, selected: Option<Vec<String>>) -> Result<()
                         memory_mb: container.limits.mem,
                         kernel_args: None,
                     }),
-                    env: container.env,
+                    env: container.env.clone(),
                     ..Default::default()
                 };
 

@@ -48,7 +48,7 @@ pub struct Container {
     pub build: PathBuf,
     pub limits: Limits,
     ports: Option<Vec<u32>>,
-    pub env: HashMap<String, String>,
+    pub env: Option<HashMap<String, String>>,
 }
 
 // im honestly uncertain what types these should be so im using these
