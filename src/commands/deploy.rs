@@ -41,10 +41,7 @@ pub async fn command(config: Config, selected: Option<Vec<String>>) -> Result<()
     for chall in &challs {
         for (name, container) in &chall.containers {
             let id = chall.container_id(&name);
-            let machine_id = if selected.is_none()
-                || challs
-                    .iter()
-                    .any(|c| selected.as_ref().unwrap().contains(&c.id))
+            let machine_id = if selected.is_none() || selected.as_ref().unwrap().contains(&chall.id)
             {
                 chall.push(&repo, name).await?;
                 // println!(
