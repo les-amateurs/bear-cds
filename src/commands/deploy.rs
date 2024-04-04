@@ -109,7 +109,14 @@ pub async fn command(config: Config, selected: Option<Vec<String>>) -> Result<()
     .await?;
 
     if let Some(rctf) = &config.rctf {
-        for chall in &challs {
+        for chall in challs
+            .iter()
+            .filter(|c| match selected.as_ref().map(|s| s.contains(&c.id)) {
+                Some(v) => v,
+                None => true,
+            })
+            .collect::<Vec<&Challenge>>()
+        {
             if let Some(true) = chall.hidden {
             } else {
                 rctf::update_chall(&config, chall).await?;
