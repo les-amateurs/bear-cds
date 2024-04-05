@@ -160,7 +160,10 @@ impl Challenge {
             println!("building image: {}", options.t);
             let mut build = DOCKER.build_image(options, None, Some(contents.into()));
             while let Some(build_step) = build.next().await {
-                if let Some(stream) = build_step?.stream {
+                if let Some(stream) = build_step
+                    .map_err(|err| anyhow!("docker error: {err:?}"))?
+                    .stream
+                {
                     print!("{stream}")
                 }
             }
