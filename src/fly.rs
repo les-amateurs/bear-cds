@@ -32,6 +32,13 @@ pub struct MachineService {
     pub protocol: String,
     pub internal_port: u32,
     pub ports: Vec<MachinePort>,
+    pub concurrency: Option<MachineConcurrency>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct MachineConcurrency {
+    pub soft_limit: u32,
+    pub hard_limit: u32,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]

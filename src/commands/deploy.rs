@@ -207,6 +207,11 @@ async fn update_ingress(
             }],
             protocol: "tcp".to_string(),
             internal_port: *port,
+
+            concurrency: Some(fly::MachineConcurrency {
+                soft_limit: 500,
+                hard_limit: 500,
+            }),
         });
     }
 
@@ -217,6 +222,10 @@ async fn update_ingress(
         }],
         protocol: "tcp".to_string(),
         internal_port: 80,
+        concurrency: Some(fly::MachineConcurrency {
+            soft_limit: 3000,
+            hard_limit: 3000,
+        }),
     });
 
     services.push(fly::MachineService {
@@ -226,6 +235,10 @@ async fn update_ingress(
         }],
         protocol: "tcp".to_string(),
         internal_port: 443,
+        concurrency: Some(fly::MachineConcurrency {
+            soft_limit: 3000,
+            hard_limit: 3000,
+        }),
     });
 
     println!(
