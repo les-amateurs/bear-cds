@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use base64::Engine;
+use flate2::{write::GzEncoder, Compression};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf};
@@ -58,7 +59,25 @@ pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<(
                         Err(anyhow!("Provided file {} is not a file.", file.display()))?
                     }
                 }
-                _ => todo!("sorry, dir not implemented ;-;"),
+                Attachment::Folder { dir, r#as, exclude } => {
+                    let mut path: PathBuf = config.chall_root.clone();
+                    path.push(&chall.id);
+                    path.push(dir);
+                    if path.is_dir() {
+                        let buf = Vec::new();
+                        let enc = GzEncoder::new(buf, Compression::default());
+                        let mut tar = tar::Builder::new(enc);
+                        tar.append_dir_all(".", &path)?;
+                        files.push(RctfFile {
+                            name: r#as
+                                .clone()
+                                .unwrap_or(dir.file_name().unwrap().to_str().unwrap().to_string()),
+                            data: tar.into_inner()?.finish()?,
+                        });
+                    } else {
+                        Err(anyhow!("Provided path {} is not a dir", dir.display()))?;
+                    }
+                }
             }
         }
 
