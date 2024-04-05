@@ -177,6 +177,12 @@ async fn build_ingress(app_name: &str, repo: &str) -> Result<fly::MachineInfo> {
         &fly::MachineConfig {
             image: tag,
             services: None,
+            guest: Some(fly::AllocatedResources {
+                cpu_kind: "shared".to_string(),
+                cpus: Some(4),
+                memory_mb: Some(1024),
+                kernel_args: None,
+            }),
             ..Default::default()
         },
     )?;
@@ -230,6 +236,12 @@ async fn update_ingress(
             &fly::MachineConfig {
                 image: tag,
                 services: Some(services.into()),
+                guest: Some(fly::AllocatedResources {
+                    cpu_kind: "shared".to_string(),
+                    cpus: Some(4),
+                    memory_mb: Some(1024),
+                    kernel_args: None,
+                }),
                 ..Default::default()
             },
         )?
