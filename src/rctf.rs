@@ -64,14 +64,14 @@ pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<(
                     path.push(&chall.id);
                     path.push(dir);
                     if path.is_dir() {
+                        let filename = dir.file_name().unwrap().to_str().unwrap().to_string();
+                        let name = r#as.clone().unwrap_or(filename);
                         let buf = Vec::new();
                         let enc = GzEncoder::new(buf, Compression::default());
                         let mut tar = tar::Builder::new(enc);
-                        tar.append_dir_all(".", &path)?;
+                        tar.append_dir_all(format!("./{name}"), &path)?;
                         files.push(RctfFile {
-                            name: r#as
-                                .clone()
-                                .unwrap_or(dir.file_name().unwrap().to_str().unwrap().to_string()),
+                            name: format!("{name}.tar.gz"),
                             data: tar.into_inner()?.finish()?,
                         });
                     } else {

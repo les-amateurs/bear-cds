@@ -52,7 +52,7 @@ pub enum Attachment {
     Folder {
         dir: PathBuf,
         r#as: Option<String>,
-        exclude: Vec<PathBuf>,
+        exclude: Option<Vec<PathBuf>>,
     },
 }
 
