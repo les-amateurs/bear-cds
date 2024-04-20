@@ -122,6 +122,19 @@ pub async fn update_chall(config: &crate::Config, chall: &Challenge) -> Result<(
     Ok(())
 }
 
+pub async fn fetch_leaderboard(config: &crate::Config) -> Result<()> {
+    let rctf: &Config = config.rctf.as_ref().unwrap();
+    let data: serde_json::Value = ureq::get(&format!("{}/api/v1/integrations/ctftime/leaderboard", rctf.url))
+    .set("Authorization", &AUTH_HEADER)
+    .call()?
+    .into_json()?;
+
+    let mut file = File::create("./ctftime.json")?;
+    serde_json::to_writer(&mut file, &data)?;
+    Ok(())
+
+}
+
 pub struct RctfFile {
     name: String,
     data: Vec<u8>,

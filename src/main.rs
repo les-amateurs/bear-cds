@@ -75,11 +75,14 @@ pub enum Commands {
         challs: Option<Vec<String>>,
     },
 
-    // Deploy all challenges to fly.io
+    /// Deploy all challenges to fly.io
     Deploy {
         #[arg()]
         challs: Option<Vec<String>>,
     },
+
+    /// Fetch the leaderboard and save it to ctftime.json
+    Leaderboard,
 }
 
 #[tokio::main]
@@ -144,6 +147,7 @@ async fn main() -> Result<()> {
             ()
         }
         Commands::Deploy { challs } => commands::deploy::command(config, challs).await?,
+        Commands::Leaderboard => commands::leaderboard::command(config).await?,
     }
 
     Ok(())
