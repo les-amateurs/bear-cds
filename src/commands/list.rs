@@ -1,7 +1,7 @@
 use crate::{challenge::Challenge, fly, Config};
 use anyhow::Result;
 use colored::*;
-use std::{cmp::max, collections::HashMap};
+use std::collections::HashMap;
 
 enum MachineState {
     NotDeployed,

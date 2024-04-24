@@ -3,7 +3,7 @@ use base64::Engine;
 use flate2::{write::GzEncoder, Compression};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf};
+use std::{env, fs::File, io::Read, path::PathBuf};
 use ureq;
 
 use crate::challenge::{Attachment, Challenge, Expose};

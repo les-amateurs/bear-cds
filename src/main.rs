@@ -1,3 +1,45 @@
+//! A highly opinionated challenge deployment system by Les Amateurs!
+//! 
+//! Currently, it deploys challenges to fly.io and manages them. It is designed to be used with the rCTF platform. We may add support for different deployment targets in the future (e.g. AWS, GCP, etc).
+//! 
+//! Under the hood, we heavily take advantage of the fly api, and also use docker to build and run challenges. Caddy is also used to serve the challenges. (Caddy is hosted as a machine on fly.io and is used as a reverse proxy to the challenges.)
+//! 
+//! The tool is designed to be used with a specific directory structure. The root directory should contain a `bear.toml` file with the following structure:
+//! 
+//! ```
+//! [fly]
+//! org = "your-fly-org-name"
+//! app_name = "your-app-name"
+//! 
+//! [rctf]
+//! url = "https://rctf.your-ctf.com"
+//! ```
+//! 
+//! The credentials are stored inside a `.env` file in the root directory. The `.env` file should contain the following:
+//! 
+//! ```
+//! RCTF_ADMIN_TOKEN="your-rctf-api-token"
+//! FLY_API_HOSTNAME="your-fly-api-hostname"
+//! FLY_API_TOKEN="your-fly-api-token"
+//! ```
+//! 
+//! Check out the example_repo for a sample directory structure. Create a folder for each challenge category and create a folder inside of that for each challenge.
+//! 
+//! ```tree
+//! ├── bear.toml
+//! ├── crypto
+//! │   ├── aesy
+//! │   │   ├── challenge.toml
+//! │   │   └── flag.txt
+//! │   ├── rsa
+//! │   │    ├── challenge.toml
+//! │   │    └── ...
+//! ├── another-category-here
+//! │   └──  ...
+//! ├── .env
+//! ```
+//! 
+
 use anyhow::Result;
 use bollard::Docker;
 
@@ -23,6 +65,7 @@ lazy_static! {
 }
 
 #[macro_export]
+/// Helper macro to print a message to stderror in red and bold
 macro_rules! print_error {
     ($($arg:tt)*) => ({
         use colored::*;
@@ -31,13 +74,19 @@ macro_rules! print_error {
 }
 
 #[derive(Deserialize)]
+/// Configuration struct for the application.
 pub struct Config {
+    /// Configuration for fly.io
     pub fly: fly::Config,
+    /// Configuration for rCTF
     pub rctf: Option<rctf::Config>,
     #[serde(default = "default_chall_root")]
+    /// Root directory for challenges (defaults to current directory)
     pub chall_root: PathBuf,
+    /// Hostname for the caddy machine
     pub hostname: String,
     #[serde(default = "default_caddy")]
+    /// Caddy configuration
     pub caddy: serde_json::Value,
 }
 
@@ -62,6 +111,8 @@ struct Args {
 }
 
 #[derive(Debug, Subcommand)]
+
+/// Subcommands for the application
 pub enum Commands {
     /// List all challenges
     List,
@@ -72,12 +123,14 @@ pub enum Commands {
         #[arg(long, default_value = "4")]
         threads: usize,
         #[arg()]
+        /// List of challenges to build
         challs: Option<Vec<String>>,
     },
 
     /// Deploy all challenges to fly.io
     Deploy {
         #[arg()]
+        /// List of challenges to deploy
         challs: Option<Vec<String>>,
     },
 
@@ -153,6 +206,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Helper function to print the response body of a ureq error
 pub fn debug<T>(res: Result<T>) -> Result<()> {
     if let Err(e) = res {
         if let Ok(ureq::Error::Status(_, response)) = e.downcast() {
